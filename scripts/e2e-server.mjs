@@ -1,0 +1,13 @@
+import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Store } from '../dist/server/store.js';
+import { createApp } from '../dist/server/app.js';
+const directory = await mkdtemp(join(tmpdir(), 'taskotter-e2e-'));
+await mkdir('test-results', { recursive: true });
+await writeFile('test-results/data-directory.txt', directory);
+const store = new Store(directory);
+await store.initialize();
+const app = await createApp(store, 'dist/frontend');
+await app.listen({ host: '127.0.0.1', port: 3010 });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { void app.close(); });

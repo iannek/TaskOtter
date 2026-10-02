@@ -1,0 +1,88 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, readFile, writeFile, unlink, rm, readdir, rename } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Store } from '../src/server/store.js';
+import { createApp } from '../src/server/app.js';
+import { emptyData, newTask, newOutcome, type Data } from '../src/shared/model.js';
+vi.mock('node:fs/promises', async importOriginal => { const original = await importOriginal<typeof import('node:fs/promises')>(); return { ...original, rename: vi.fn(original.rename) }; });
+let directory: string, store: Store, app: Awaited<ReturnType<typeof createApp>>;
+const call = (method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown, headers = {}) => app.inject({ method, url, payload: payload as object, headers: { host: 'localhost', ...headers } });
+beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'taskotter-test-')); store = new Store(directory); await store.initialize(); app = await createApp(store); });
+afterEach(async () => { await app.close(); await rm(directory, { recursive: true, force: true }); });
+describe('storage and API', () => {
+  it('initializes only explicitly and never overwrites an existing file', async () => {
+    const before = await readFile(store.file, 'utf8'); await expect(store.initialize()).rejects.toThrow(); expect(await readFile(store.file, 'utf8')).toBe(before);
+    await unlink(store.file); expect((await call('GET', '/api/data')).statusCode).toBe(503); expect((await readdir(directory))).toEqual([]);
+  });
+  it('creates server IDs even for empty client IDs and persists across new Store instances', async () => {
+    const response = await call('POST', '/api/tasks', newTask('名前だけ')); expect(response.statusCode).toBe(200);
+    const data: Data = response.json(); expect(data.tasks[0].id).toMatch(/^[\da-f-]{36}$/); expect(data.tasks[0].status).toBe('Inbox'); expect(await new Store(directory).read()).toEqual(data);
+  });
+  it('reads external changes and does not lose unrelated data when applying an operation', async () => {
+    const response = await call('POST', '/api/tasks', newTask('最初')); const original = response.json().tasks[0];
+    const external = await store.read(); external.tasks.push(newTask('外部追加', 'external')); await writeFile(store.file, JSON.stringify(external));
+    expect((await call('GET', '/api/data')).json().tasks).toHaveLength(2);
+    const changed = await call('PUT', `/api/tasks/${original.id}`, { ...original, name: '後の保存が優先' }); expect(changed.json().tasks.map((t: { name: string }) => t.name)).toEqual(['後の保存が優先', '外部追加']);
+  });
+  it.each(['{"tasks":', JSON.stringify({ ...emptyData(), schemaVersion: 2 }), JSON.stringify({ ...emptyData(), tasks: [{ ...newTask('Task', 't'), outcomeId: 'missing' }] })])('locks invalid files and preserves original bytes: %s', async invalid => {
+    await writeFile(store.file, invalid); expect((await call('GET', '/api/data')).statusCode).toBe(422);
+    for (const [method, url, payload] of [['POST', '/api/tasks', newTask('Task')], ['PUT', '/api/settings', { timeStep: 30 }], ['DELETE', '/api/tasks/id', undefined]] as const) expect((await call(method, url, payload)).statusCode).toBe(422);
+    expect(await readFile(store.file, 'utf8')).toBe(invalid); await writeFile(store.file, JSON.stringify(emptyData())); expect((await call('POST', '/api/tasks', newTask('復旧'))).statusCode).toBe(200);
+  });
+  it('serializes simultaneous writes', async () => {
+    const responses = await Promise.all(Array.from({ length: 20 }, (_, i) => call('POST', '/api/tasks', newTask(`Task ${i}`)))); expect(responses.every(r => r.statusCode === 200)).toBe(true);
+    expect((await store.read()).tasks).toHaveLength(20); expect(await readdir(directory)).toEqual(['taskotter.json']);
+  });
+  it('keeps original data and cleans temporary files when rename fails', async () => {
+    const original = await readFile(store.file, 'utf8');
+    // Fault injection uses the real fs API except the atomic replacement.
+    vi.mocked(rename).mockRejectedValueOnce(new Error('simulated mount failure'));
+    try { await expect(store.change(d => d.tasks.push(newTask('Task', 't')))).rejects.toThrow(/mount failure/); }
+    finally { vi.mocked(rename).mockClear(); }
+    expect(await readFile(store.file, 'utf8')).toBe(original); expect(await readdir(directory)).toEqual(['taskotter.json']);
+  });
+  it('enforces manual Outcome completion, automatically clears it on reopen/link, and detaches on delete', async () => {
+    let d = (await call('POST', '/api/outcomes', newOutcome('Outcome'))).json() as Data; const o = d.outcomes[0];
+    d = (await call('POST', '/api/tasks', { ...newTask('Task'), outcomeId: o.id })).json(); const t = d.tasks[0];
+    expect((await call('PUT', `/api/outcomes/${o.id}`, { ...o, complete: true })).statusCode).toBe(422);
+    d = (await call('PUT', `/api/tasks/${t.id}`, { ...t, status: 'Done' })).json(); expect(d.outcomes[0].complete).toBe(false);
+    d = (await call('PUT', `/api/outcomes/${o.id}`, { ...o, complete: true })).json(); expect(d.outcomes[0].complete).toBe(true);
+    d = (await call('PUT', `/api/tasks/${t.id}`, { ...t, status: 'Doing' })).json(); expect(d.outcomes[0].complete).toBe(false);
+    await call('PUT', `/api/tasks/${t.id}`, { ...t, status: 'Done' }); await call('PUT', `/api/outcomes/${o.id}`, { ...o, complete: true });
+    d = (await call('POST', '/api/tasks', { ...newTask('新しいTask'), outcomeId: o.id })).json(); expect(d.outcomes[0].complete).toBe(false);
+    d = (await call('DELETE', `/api/outcomes/${o.id}`)).json(); expect(d.outcomes).toHaveLength(0); expect(d.tasks).toHaveLength(2); expect(d.tasks.every(t => t.outcomeId === '')).toBe(true);
+  });
+  it('rejects unknown fields and type coercion without altering disk', async () => {
+    expect((await call('POST', '/api/tasks', { ...newTask('Task'), injected: true })).statusCode).toBe(400);
+    expect((await call('PUT', '/api/settings', { timeStep: '30' })).statusCode).toBe(400); expect((await store.read()).settings.timeStep).toBe(15);
+  });
+  it('rejects hostile origin/host requests and disables API caching', async () => {
+    expect((await call('GET', '/api/data', undefined, { host: 'attacker.example' })).statusCode).toBe(403);
+    expect((await call('POST', '/api/tasks', newTask('Task'), { origin: 'https://evil.example' })).statusCode).toBe(403);
+    expect((await call('POST', '/api/tasks', newTask('Task'), { origin: 'http://localhost:9999' })).statusCode).toBe(403);
+    expect((await call('GET', '/api/data')).headers['cache-control']).toBe('no-store');
+  });
+  it('returns 404 for missing targets and leaves valid data unchanged', async () => { expect((await call('PUT', '/api/tasks/missing', newTask('Task', 'missing'))).statusCode).toBe(404); expect((await store.read()).tasks).toEqual([]); });
+  it('atomically creates an Outcome and Task, or links an updated Task to a new Outcome', async () => {
+    let response = await call('POST', '/api/tasks/with-outcome', { task: newTask('新Task'), newOutcomeName: '  新Outcome  ' });
+    expect(response.statusCode).toBe(200);
+    let data = response.json() as Data;
+    expect(data.outcomes[0]).toMatchObject({ name: '新Outcome', priority: 'Medium', complete: false, start: '', end: '' });
+    expect(data.tasks[0].outcomeId).toBe(data.outcomes[0].id);
+    response = await call('PUT', `/api/tasks/with-outcome/${data.tasks[0].id}`, { task: { ...data.tasks[0], outcomeId: '' }, newOutcomeName: '別Outcome' });
+    expect(response.statusCode).toBe(200); data = response.json(); expect(data.tasks).toHaveLength(1); expect(data.outcomes).toHaveLength(2); expect(data.tasks[0].outcomeId).toBe(data.outcomes[1].id);
+  });
+  it('leaves no orphan Outcome after invalid Task, missing target, duplicate name or failed write', async () => {
+    const original = await readFile(store.file, 'utf8');
+    expect((await call('POST', '/api/tasks/with-outcome', { task: { ...newTask('Task'), next: '2026-10-02T10:00' }, newOutcomeName: '孤立しない' })).statusCode).toBe(422);
+    expect((await call('PUT', '/api/tasks/with-outcome/missing', { task: newTask('Task', 'missing'), newOutcomeName: '孤立しない' })).statusCode).toBe(404);
+    vi.mocked(rename).mockRejectedValueOnce(new Error('simulated mount failure'));
+    expect((await call('POST', '/api/tasks/with-outcome', { task: newTask('Task'), newOutcomeName: '孤立しない' })).statusCode).toBe(500);
+    expect(await readFile(store.file, 'utf8')).toBe(original);
+    await call('POST', '/api/outcomes', newOutcome('同名')); const before = await readFile(store.file, 'utf8');
+    expect((await call('POST', '/api/tasks/with-outcome', { task: newTask('Task'), newOutcomeName: ' 同名 ' })).statusCode).toBe(409);
+    expect(await readFile(store.file, 'utf8')).toBe(before);
+  });
+
+});

@@ -1,0 +1,17 @@
+FROM node:24-bookworm
+
+ARG DEV_UID=501
+ARG DEV_GID=20
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ripgrep ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @openai/codex@latest \
+    && useradd --uid "$DEV_UID" --gid "$DEV_GID" --create-home dev
+
+ENV HOME=/home/dev
+ENV CODEX_HOME=/home/dev/.codex
+WORKDIR /workspace
+USER dev
+
+CMD ["sleep", "infinity"]
