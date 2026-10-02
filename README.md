@@ -10,7 +10,7 @@
 
 ## 起動
 
-WindowsのPowerShell（WSLコンテナー）とMacでホストにNode.jsを入れずに利用する手順は [コンテナ起動手順](docs/running.md) を参照してください。
+WindowsのPowerShell（WSLコンテナー）、WSL UbuntuのDocker Engine、MacでホストにNode.jsを入れずに利用する手順は [コンテナ起動手順](docs/running.md) を参照してください。
 
 現在の開発コンテナ内では次のコマンドで起動できます。データの初期化は初回のみです。既存ファイルがあれば初期化コマンドは失敗し、上書きしません。
 
@@ -49,3 +49,5 @@ PlaywrightのOSライブラリのインストールには開発コンテナの�
 
 - [要件別の実装状況](ドキュメント/実装状況.md)
 - [確認結果・追加要望と反映状況](ドキュメント/確認結果・追加要望.md)
+
+WSL UbuntuにDockerを導入して使う場合は [Docker起動手順](docs/wsl-docker.md) と [起動スクリプト](scripts/run-wsl-docker.sh) を参照してください。

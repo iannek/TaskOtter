@@ -24,6 +24,21 @@ sh scripts/run-mac.sh start
 
 イメージ更新・保存先変更では停止後に `sh scripts/run-mac.sh delete` でコンテナを削除し、build/upを実行します。マウントされたホストのデータは削除されません。
 
+## Windows（WSL Ubuntu + Docker Engine）
+
+wslc方式が動かない場合や、従来のDocker Engineを使用したい場合は、[WSL UbuntuのDocker起動手順](wsl-docker.md)を利用してください。Dockerの導入から、保存先指定・起動・更新・既存データの引き継ぎまで記載しています。
+
+Docker導入済みのUbuntuでの起動例：
+
+```sh
+export TASKOTTER_DOCKER_SUDO=1
+sh scripts/run-wsl-docker.sh build
+sh scripts/run-wsl-docker.sh init '/mnt/c/Users/YOUR_NAME/Documents/TaskOtter data'
+sh scripts/run-wsl-docker.sh up '/mnt/c/Users/YOUR_NAME/Documents/TaskOtter data' 3000
+```
+
+sudoなしでDockerを利用できる場合はexport不要です。既存JSONがある場合はinit不要です。Windowsブラウザで `http://localhost:3000` を開きます。
+
 ## Windows（PowerShellから直接実行）
 
 WindowsのPowerShellから、WSLに組み込まれた `wslc.exe` を直接使用します。Ubuntuのインストール・起動や、ホスト側のNode.js・Docker Desktopのインストールは必要ありません。コンテナ内のLinux環境はWSLが管理します。[Microsoftの公式手順](https://learn.microsoft.com/en-us/windows/wsl/tutorials/wsl-containers) はPowerShellからの実行を案内しています。

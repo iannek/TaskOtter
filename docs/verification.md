@@ -119,3 +119,24 @@ Linux Chromiumの検証で、Mac実機の今回の変更の再確認は未実施
 追加検証では、階層一覧のOutcome期間部分・Enter、ガントのOutcome件数部分と期間なしの親行からの詳細表示、Doneの初期非表示・チェック切り替え・Done絞り込み・カード内非表示と進捗維持を確認。1440pxで月の日付列が月末まで画面内に収まり、翌月に切り替えて日数が変わり、幅800pxでは横スクロールで月末に到達できることも確認した。従来の14件も成功。
 
 Linux Chromiumで検証し、Mac実機での今回の変更の再確認は未実施。保存形式・API・依存関係の変更はない。
+
+
+## 2026/10/02：Windowsの直接起動手順の改訂
+
+[Microsoft Learn](https://learn.microsoft.com/en-us/windows/wsl/tutorials/wsl-containers)、[WSL 3.0.1の公式リリース](https://github.com/microsoft/WSL/releases/tag/3.0.1)、[2026-09-29の正式公開](https://blogs.windows.com/windowsdeveloper/2026/09/29/wsl-containers-now-generally-available/)を確認。WindowsのPowerShellからwslc.exeを直接呼ぶ手順に変更し、Ubuntuの起動を前提から除いた。
+
+- PowerShell 7.5.4（Linux ARM64）でrun-windows.ps1の構文と実行を検証。CLIとWindowsパスのメタデータを代替した18項目が成功。プロジェクトルートからのビルド、日本語・空白・角括弧を含むパスと初期化コードが一つの引数になること、loopbackの公開、停止・再開・削除、保存先未指定・形式不正・ファイル指定・ポート不正・CLI不在の拒否、CLI失敗と作業ディレクトリの復元を確認した。
+- 任意の互換入口run-windows.shは、Windowsコマンドを代替したPythonテスト6件が成功。保存先変換、空白・日本語の引数、既定ポート、各操作、不正・未指定パス、PowerShell失敗の終了コード伝播を確認した。
+- sh -n、npm run check（エラー・警告なし）、npm run build、通常テスト44件が成功。UI変更がないためブラウザテストの追加再実行はしていない。
+
+テストコードは[windows-script.ps1](../tests/windows-script.ps1)、[CLI代替](../tests/windows-cli-stub.py)、[WSL入口の検証](../tests/windows-wrapper.py)。Linux上のPowerShellでの再実行例：
+
+```sh
+mkdir -p /tmp/taskotter-wslc-test
+cp tests/windows-cli-stub.py /tmp/taskotter-wslc-test/wslc.exe
+chmod +x /tmp/taskotter-wslc-test/wslc.exe
+pwsh -NoProfile -File tests/windows-script.ps1 -StubDirectory /tmp/taskotter-wslc-test
+python3 tests/windows-wrapper.py
+```
+
+実際のWindows PowerShell 5.1・wslc.exeの起動、Containerfileのビルド、Windowsディレクトリのマウント・保存・再起動後の保持・接続制限は未検証。引数の代替テストを、実際のWindowsの保存や起動の検証として扱わない。
