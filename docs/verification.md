@@ -140,3 +140,19 @@ python3 tests/windows-wrapper.py
 ```
 
 実際のWindows PowerShell 5.1・wslc.exeの起動、Containerfileのビルド、Windowsディレクトリのマウント・保存・再起動後の保持・接続制限は未検証。引数の代替テストを、実際のWindowsの保存や起動の検証として扱わない。
+
+
+## WSL Ubuntu + Docker Engineの起動スクリプト
+
+Dockerの[Ubuntu公式導入手順](https://docs.docker.com/engine/install/ubuntu/)、Microsoftの[WSL systemd](https://learn.microsoft.com/en-us/windows/wsl/systemd)・[ネットワーク資料](https://learn.microsoft.com/en-us/windows/wsl/networking)を確認し、Docker用の代替起動経路を追加。
+
+`python3 tests/wsl-docker-script.py` の8件が成功。代替CLIで、別ディレクトリからのビルドコンテキスト、相対保存先の絶対化、日本語・空白・角括弧のパス、利用者のUID/GID、既定・任意ポートとloopback、Dockerだけのsudo、未指定・不正引数拒否、ライフサイクル操作と削除時の保存先保持、CLI失敗時に成功URLを表示しないこと、ファイルを保存ディレクトリとして受け付けないことを確認した。
+
+sh構文確認・型チェック（エラー・警告なし）・ビルドも成功。アプリ本体・依存関係・保存Schemaは変更なし。実際のDocker Engine、WSL Ubuntu、Windowsの保存先・ブラウザ接続はこの開発環境では未検証。
+
+
+## WSL Ubuntuでの直接起動（専用Node.js）
+
+`python3 tests/wsl-direct-script.py` の7件が成功。代替Node/npmとローカル配布アーカイブで、SHA-256検証と不一致時の展開拒否、ダウンロード一時ファイルの片付け、既存環境の再利用、ci（ignore-scripts）・audit・check・buildの順序と失敗時停止、専用キャッシュ、保存先の絶対化、日本語・空白・角括弧のパス、loopbackとポート、未指定・不正引数を確認した。
+
+実際のNode.js 24.21.0でも起動スクリプト経由のJSON初期化と、再初期化の拒否・既存内容の保持を確認。sh構文確認、check（エラー・警告なし）、build、既存単体/APIテスト44件が成功。package.json / package-lock.jsonの変更なし。実際の公式配布ダウンロード、WSLのWindowsマウントでの保存・Windowsブラウザ接続は未検証。

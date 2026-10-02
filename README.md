@@ -51,3 +51,5 @@ PlaywrightのOSライブラリのインストールには開発コンテナの�
 - [確認結果・追加要望と反映状況](ドキュメント/確認結果・追加要望.md)
 
 WSL UbuntuにDockerを導入して使う場合は [Docker起動手順](docs/wsl-docker.md) と [起動スクリプト](scripts/run-wsl-docker.sh) を参照してください。
+
+WSL Ubuntuでシステムへのインストールを避けて直接動かす場合は、[専用Node.js起動手順](docs/wsl-direct.md)を参照してください。

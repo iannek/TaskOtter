@@ -1,6 +1,10 @@
-# コンテナ起動手順
+# 起動手順
 
 Node 24、Svelte、Fastifyを共通の `Containerfile` にまとめます。アプリと保存先を分け、ホスト側ディレクトリを `/data` にマウントします。起動・初期化・保存先変更は別の操作です。
+
+## Windows（WSL Ubuntuから直接起動）
+
+環境への変更を少なくしたい場合は、[専用Node.jsで直接起動する手順](wsl-direct.md)を利用してください。`scripts/run-wsl-direct.sh` が専用実行環境の準備・ビルド・保存先の初期化・起動を行います。DockerやシステムへのNode.jsインストールは不要です。
 
 ## Mac
 
