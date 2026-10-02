@@ -24,24 +24,77 @@ sh scripts/run-mac.sh start
 
 イメージ更新・保存先変更では停止後に `sh scripts/run-mac.sh delete` でコンテナを削除し、build/upを実行します。マウントされたホストのデータは削除されません。
 
-## Windows（WSL Ubuntu）
+## Windows（PowerShellから直接実行）
 
-WSL 2.9.3以降と `wslc.exe` が必要です。[Microsoftの公式手順](https://learn.microsoft.com/en-us/windows/wsl/tutorials/wsl-containers) を確認してください。Ubuntuのターミナルから実行します。
+WindowsのPowerShellから、WSLに組み込まれた `wslc.exe` を直接使用します。Ubuntuのインストール・起動や、ホスト側のNode.js・Docker Desktopのインストールは必要ありません。コンテナ内のLinux環境はWSLが管理します。[Microsoftの公式手順](https://learn.microsoft.com/en-us/windows/wsl/tutorials/wsl-containers) はPowerShellからの実行を案内しています。
+
+2026-10-02に公式情報を確認した時点では、最新安定版は **WSLパッケージ3.0.1**、WSLコンテナーの正式公開は2026-09-29です。[公式リリース](https://github.com/microsoft/WSL/releases/tag/3.0.1)、[正式公開の案内](https://blogs.windows.com/windowsdeveloper/2026/09/29/wsl-containers-now-generally-available/) を参照してください。Microsoft Learnに記載されている機能の最小バージョンは2.9.3ですが、この手順では `wsl --update` で安定版へ更新して利用します。WSLパッケージの3.xと、Linux実行方式の「WSL 2」（`wsl --list --verbose` のVERSION）は別の番号です。
+
+### WSLの準備（初回）
+
+WSLが未導入の場合は、管理者PowerShellで次を実行し、Windowsから再起動を求められたら再起動します。`--no-distribution` はUbuntuなどのディストリビューションを追加しない指定です。[WSLの公式コマンド資料](https://learn.microsoft.com/en-us/windows/wsl/basic-commands) を参照してください。
+
+```powershell
+wsl --install --no-distribution
+```
+
+WSLが導入済みならインストールは不要です。PowerShellで更新と利用可能なCLIを確認します。通常のTaskOtter操作はWindowsのPowerShellで行います。
+
+```powershell
+wsl --update
+wsl --version
+wslc.exe version
+```
+
+### ビルド・初期化・起動
+
+プロジェクトをWindows側のディレクトリに置き、そのディレクトリでPowerShellを開きます。Windows PowerShell 5.1またはPowerShell 7を使用できます。保存先は `C:\...` や `D:\...` の絶対パスを指定します。空白・日本語・角括弧を含む場合も引用符で囲んで一つの引数として渡します。
+
+```powershell
+$dataDirectory = Join-Path $env:USERPROFILE 'Documents\TaskOtter data'
+.\scripts\run-windows.ps1 build
+.\scripts\run-windows.ps1 init $dataDirectory
+.\scripts\run-windows.ps1 up $dataDirectory 3000
+```
+
+Windowsブラウザで `http://localhost:3000` を開きます。保存先は `$dataDirectory\taskotter.json` です。保存先を省略するとエラーになり、既定の保存先は作りません。`init` は空の保存先への初回のみ実行し、既存JSONがある場合は不要です。初期化は既存ファイルを上書きせず、CLI失敗時はスクリプトもエラーで停止します。
+
+```powershell
+.\scripts\run-windows.ps1 stop
+.\scripts\run-windows.ps1 start
+```
+
+イメージ更新では停止・コンテナ削除・ビルド・再作成を行います。
+
+```powershell
+.\scripts\run-windows.ps1 stop
+.\scripts\run-windows.ps1 delete
+.\scripts\run-windows.ps1 build
+.\scripts\run-windows.ps1 up $dataDirectory 3000
+```
+
+`delete` はコンテナのみを削除し、Windowsの保存ディレクトリは削除しません。保存先を変更する場合もstop/delete/upで再作成し、新しい保存先が空なら初回のみinitを実行します。既存タスクを引き継ぐ場合は、停止後に `taskotter.json` を新しい保存先へコピーします。
+
+スクリプトの実行がPowerShellの実行ポリシーで拒否された場合は、信頼するファイルか確認し、組織のポリシーに従って実行を許可してください。スクリプトからポリシーは変更しません。
+
+### 既存のWSLターミナルから使う場合
+
+以前の `scripts/run-windows.sh` は互換用として残しています。`/mnt/c/...` の保存先をWindowsパスに変換し、Windows PowerShellの新スクリプトを呼びます。WSLターミナルからの利用は任意で、Windowsから実行する場合は不要です。
 
 ```sh
-sh scripts/run-windows.sh build
-sh scripts/run-windows.sh init '/mnt/c/Users/YOUR_NAME/Documents/TaskOtter data'
 sh scripts/run-windows.sh up '/mnt/c/Users/YOUR_NAME/Documents/TaskOtter data' 3000
 ```
 
-Windowsブラウザで `http://localhost:3000` を開きます。保存先にはWindowsのディレクトリを `/mnt/c/...` 形式で渡し、スクリプトが `wslpath` で変換します。
+### 検証範囲とトラブル確認
 
-```sh
-sh scripts/run-windows.sh stop
-sh scripts/run-windows.sh start
+Linux環境のPowerShell 7で構文・CLIの引数・失敗処理を検証しました。Windows PowerShell 5.1、実際の `wslc.exe` によるビルド・Windowsパスのマウント・保存・再起動後の保持・ポート公開はWindows実機での検証が必要です。問題がある場合はPowerShellで以下を確認してください。
+
+```powershell
+wslc.exe build --help
+wslc.exe run --help
+wslc.exe container list --all
+wslc.exe container logs taskotter
 ```
-
-これらのスクリプトは本環境（Linux開発コンテナ）では実機実行していません。特にWSLのビルドコンテキストとWindowsパスのマウント・公開ポートは実機で確認が必要です。失敗時は `wslc.exe build --help`、`wslc.exe run --help` で利用中のCLIの仕様を確認してください。
 
 ## 保存先・接続
 
