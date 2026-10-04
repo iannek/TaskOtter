@@ -1,7 +1,8 @@
 <script lang="ts">
+  import TaskCheck from './TaskCheck.svelte';
   import DatePicker from './DatePicker.svelte';
   import TimePicker from './TimePicker.svelte';
-  import { statuses, rangeText, overflow, type Task, type Outcome } from '../../shared/model.js';
+  import { statuses, dateLabel, rangeText, overflow, type Task, type Outcome } from '../../shared/model.js';
   let { task, outcomes, timeStep, disabled, open, save }: { task: Task; outcomes: Outcome[]; timeStep: number; disabled: boolean; open: (task: Task) => void; save: (task: Task) => Promise<void> } = $props();
   let editing = $state<'range' | 'due' | 'next' | null>(null), message = $state('');
   let start = $state(''), end = $state(''), due = $state(''), day = $state(''), from = $state(''), to = $state('');
@@ -38,15 +39,16 @@
 </script>
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (表の行をEnterでも開けるようにする) -->
 <tr class="child-row" tabindex="0" aria-label={`${task.name}の詳細`} onclick={rowClick} onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(task); } }}>
-  <td><div class="task-cell"><span class="kind-tag task-kind">TASK</span><span class="row-dot {task.status}"></span><button class="row-title" onclick={() => open(task)}>{task.name}</button></div>{#if overflow(task, outcomes)}<span class="warning">⚠ Outcomeの期間外</span>{/if}</td>
+  <td class="task-name-column"><div class="task-cell"><TaskCheck {task} {disabled} {save} /><div class="task-cell-name"><button class="row-title two-line-title" title={task.name} onclick={() => open(task)}>{task.name}</button>{#if task.materials?.length || task.chats?.length || task.subtasks?.length}<div class="task-detail-counts">資料 {task.materials?.length || 0} · チャット {task.chats?.length || 0} · サブタスク {task.subtasks?.filter(row => row.complete).length || 0}/{task.subtasks?.length || 0}</div>{/if}</div></div>{#if overflow(task, outcomes)}<span class="warning">⚠ Outcomeの期間外</span>{/if}</td>
   <td><select class={`inline-status badge ${task.status}`} aria-label={`${task.name}のステータス`} {disabled} onchange={changeStatus}>{#each statuses as status}<option selected={task.status === status}>{status}</option>{/each}</select></td>
   <td>{task.category || '—'}</td>
   <td><button class="inline-field" aria-label={`${task.name}の対応予定期間を編集`} aria-expanded={editing === 'range'} {disabled} onclick={() => edit('range')}>{rangeText(task)}</button></td>
-  <td><button class="inline-field" aria-label={`${task.name}の締切日を編集`} aria-expanded={editing === 'due'} {disabled} onclick={() => edit('due')}>{task.due || '—'}</button></td>
-  <td><button class="inline-field" aria-label={`${task.name}の次の対応予定を編集`} aria-expanded={editing === 'next'} {disabled} onclick={() => edit('next')}>{task.next ? `${task.next.replace('T', ' ')}–${task.nextEnd}` : '—'}</button></td>
+  <td><button class="inline-field" aria-label={`${task.name}の締切日を編集`} aria-expanded={editing === 'due'} {disabled} onclick={() => edit('due')}>{task.due ? dateLabel(task.due) : '—'}</button></td>
+  <td><button class="inline-field schedule-field" aria-label={`${task.name}の次の対応予定を編集`} aria-expanded={editing === 'next'} {disabled} onclick={() => edit('next')}>{#if task.next}<span>{dateLabel(task.next.slice(0, 10))}</span><span class="schedule-time-label">{task.next.slice(11)}–{task.nextEnd}</span>{:else}—{/if}</button></td>
+  <td></td>
 </tr>
 {#if editing || message}
-<tr class="inline-edit-row"><td colspan="6">
+<tr class="inline-edit-row"><td colspan="7">
   {#if editing}<form class="inline-edit-form" aria-label={`${task.name}の行内編集`} onsubmit={submit}>
     <fieldset {disabled}>
       <strong>{task.name} · {editing === 'range' ? '対応予定期間' : editing === 'due' ? '締切日' : '次の対応予定'}</strong>

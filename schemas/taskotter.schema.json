@@ -81,6 +81,54 @@
         }
       ]
     },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "url",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "subtask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "complete"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
     "task": {
       "type": "object",
       "additionalProperties": false,
@@ -114,6 +162,27 @@
         "category": {
           "type": "string"
         },
+        "nextAction": {
+          "type": "string"
+        },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/subtask"
+          }
+        },
+        "materials": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/reference"
+          }
+        },
+        "chats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/reference"
+          }
+        },
         "status": {
           "enum": [
             "Inbox",
@@ -121,6 +190,15 @@
             "Waiting",
             "Doing",
             "Done",
+            "Someday"
+          ]
+        },
+        "previousStatus": {
+          "enum": [
+            "Inbox",
+            "NextAction",
+            "Waiting",
+            "Doing",
             "Someday"
           ]
         },
@@ -155,7 +233,6 @@
         "memo",
         "start",
         "end",
-        "priority",
         "complete"
       ],
       "properties": {

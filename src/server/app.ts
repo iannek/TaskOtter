@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { Store } from './store.js';
 import { schema } from '../shared/schema.js';
 import { DataError } from '../shared/validation.js';
-import { newOutcome, type Task, type Outcome, type Data } from '../shared/model.js';
+import { newOutcome, rememberCompletion, type Task, type Outcome, type Data } from '../shared/model.js';
 export async function createApp(store: Store, staticRoot?: string) {
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024, ajv: { customOptions: { coerceTypes: false, removeAdditional: false, useDefaults: false } } });
   app.addHook('onRequest', async (request, reply) => {
@@ -37,7 +37,7 @@ export async function createApp(store: Store, staticRoot?: string) {
       const list = data[kind] as (Task | Outcome)[];
       const index = list.findIndex(x => x.id === id);
       if (update && index < 0) throw new DataError(['対象データが見つかりません。再読み込みしてください。'], 404);
-      const value = { ...item, id };
+      const value = kind === 'tasks' ? rememberCompletion(list[index] as Task | undefined, { ...item, id } as Task) : { ...item, id };
       if (update) list[index] = value; else list.push(value);
       if (kind === 'tasks') {
         const task = value as Task;
@@ -66,7 +66,7 @@ export async function createApp(store: Store, staticRoot?: string) {
         const index = update ? data.tasks.findIndex(t => t.id === request.params.id) : -1;
         if (update && index < 0) throw new DataError(['対象データが見つかりません。再読み込みしてください。'], 404);
         const outcome = newOutcome(name, randomUUID());
-        const task = { ...request.body.task, id: update ? request.params.id : randomUUID(), outcomeId: outcome.id };
+        const task = rememberCompletion(update ? data.tasks[index] : undefined, { ...request.body.task, id: update ? request.params.id : randomUUID(), outcomeId: outcome.id });
         data.outcomes.push(outcome);
         if (update) data.tasks[index] = task; else data.tasks.push(task);
       }),

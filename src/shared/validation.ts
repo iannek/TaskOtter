@@ -1,5 +1,6 @@
 import { Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
+import { referenceTarget } from './references.js';
 import { schema } from './schema.js';
 import type { Data } from './model.js';
 const ajv = new Ajv({ allErrors: true, strict: true });
@@ -21,6 +22,14 @@ export function validateData(value: unknown): asserts value is Data {
   }
   data.tasks.forEach((t, i) => {
     const path = `/tasks/${i}`;
+    for (const field of ['materials', 'chats', 'subtasks'] as const) {
+      const entries = t[field] || [], entryIds = new Set<string>();
+      for (const [index, entry] of entries.entries()) {
+        if (entryIds.has(entry.id)) errors.push(`${path}/${field}/${index}/id IDが重複しています`);
+        entryIds.add(entry.id);
+        if ('url' in entry && !referenceTarget(entry.url)) errors.push(`${path}/${field}/${index}/url HTTP(S) URLかローカルの絶対パスを指定してください`);
+      }
+    }
     if (t.outcomeId && !data.outcomes.some(o => o.id === t.outcomeId)) errors.push(`${path}/outcomeId 存在しないOutcomeです`);
     if (!!t.next !== !!t.nextEnd) errors.push(`${path} 次の対応予定は日付・開始・終了が必要です`);
     if (t.next) {

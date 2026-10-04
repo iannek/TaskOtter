@@ -139,3 +139,18 @@ container exec --user root taskotter-dev sh -c 'cd /workspace && npx playwright 
 ```
 
 その後開発ユーザーで `npx playwright install chromium`、`npm run test:e2e` を実行します。ブラウザ検証用のOSライブラリはアプリ実行イメージには不要です。
+
+## 更新後の画面が変わらない場合
+
+既存Taskにも詳細4タブが表示されます。表示が旧版のままなら、実行中のアプリが更新されているかを確認してください。コンテナはイメージをbuildしただけでは更新されません。stop → delete → build → 同じ保存先でupを実行し、ブラウザを強制再読み込みします（MacはCommand＋Shift＋R、WindowsはCtrl＋F5）。既存JSONのinitは不要です。
+
+Macの更新例（保存先・ポートは現在使用している値に合わせる）：
+
+```sh
+sh scripts/run-mac.sh stop
+sh scripts/run-mac.sh delete
+sh scripts/run-mac.sh build
+sh scripts/run-mac.sh up "$HOME/Documents/TaskOtter data" 3000
+```
+
+WSL Ubuntuで直接起動している場合は、Ctrl＋Cで停止 → `sh scripts/run-wsl-direct.sh build` → 同じ保存先で `sh scripts/run-wsl-direct.sh start '/使用中の保存先' 3000` を実行します。Docker方式やPowerShell方式も各起動スクリプトのstop／delete／build／upを使います。保存先の変更やJSONの初期化で画面を更新する必要はありません。

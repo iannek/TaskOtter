@@ -53,3 +53,5 @@ PlaywrightのOSライブラリのインストールには開発コンテナの�
 WSL UbuntuにDockerを導入して使う場合は [Docker起動手順](docs/wsl-docker.md) と [起動スクリプト](scripts/run-wsl-docker.sh) を参照してください。
 
 WSL Ubuntuでシステムへのインストールを避けて直接動かす場合は、[専用Node.js起動手順](docs/wsl-direct.md)を参照してください。
+
+Task詳細は「基本情報 → メモ → 資料リンク → 関連チャット」の4タブです。Markdownメモ、次の予定で行うこと、サブタスク、資料／チャットのリンクと概要を保存できます。Outcomeの＋から紐づけ済みTaskを追加できます。[追加項目の保存仕様・互換性](docs/data-and-api.md)も参照してください。

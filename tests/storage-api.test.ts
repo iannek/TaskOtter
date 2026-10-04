@@ -68,7 +68,7 @@ describe('storage and API', () => {
     let response = await call('POST', '/api/tasks/with-outcome', { task: newTask('新Task'), newOutcomeName: '  新Outcome  ' });
     expect(response.statusCode).toBe(200);
     let data = response.json() as Data;
-    expect(data.outcomes[0]).toMatchObject({ name: '新Outcome', priority: 'Medium', complete: false, start: '', end: '' });
+    expect(data.outcomes[0]).toMatchObject({ name: '新Outcome', complete: false, start: '', end: '' });
     expect(data.tasks[0].outcomeId).toBe(data.outcomes[0].id);
     response = await call('PUT', `/api/tasks/with-outcome/${data.tasks[0].id}`, { task: { ...data.tasks[0], outcomeId: '' }, newOutcomeName: '別Outcome' });
     expect(response.statusCode).toBe(200); data = response.json(); expect(data.tasks).toHaveLength(1); expect(data.outcomes).toHaveLength(2); expect(data.tasks[0].outcomeId).toBe(data.outcomes[1].id);
@@ -85,4 +85,69 @@ describe('storage and API', () => {
     expect(await readFile(store.file, 'utf8')).toBe(before);
   });
 
+});
+
+describe('task detail extensions', () => {
+  it('reads legacy tasks without changing their file, and preserves details through ordinary updates', async () => {
+    const legacy = newTask('旧Task', 'legacy'); delete legacy.materials; delete legacy.chats; delete legacy.subtasks; delete legacy.nextAction;
+    await writeFile(store.file, JSON.stringify({ ...emptyData(), tasks: [legacy] }));
+    const bytes = await readFile(store.file, 'utf8');
+    expect((await call('GET', '/api/data')).statusCode).toBe(200);
+    expect(await readFile(store.file, 'utf8')).toBe(bytes);
+    const details = { ...legacy, memo: '# Markdown\n\n**メモ**', nextAction: '課題を分類',
+      subtasks: [{ id: 's', name: '確認する', complete: true }],
+      materials: [{ id: 'm', url: 'C:\\Users\\User\\資料 [test]\\報告.xlsx', summary: 'ローカル資料' }],
+      chats: [{ id: 'c', url: 'https://teams.microsoft.com/l/message/test', summary: '相談' }] };
+    expect((await call('PUT', '/api/tasks/legacy', details)).statusCode).toBe(200);
+    expect((await new Store(directory).read()).tasks[0]).toEqual(details);
+    expect((await call('PUT', '/api/tasks/legacy', { ...details, status: 'Doing' })).json().tasks[0].materials).toEqual(details.materials);
+    expect((await store.read()).tasks[0].status).toBe('Doing'); // Completing a checklist does not complete its Task.
+  });
+  it.each(['javascript:alert(1)', 'data:text/html,test', 'https://', 'relative/path'])('rejects unusable reference targets without touching the file: %s', async url => {
+    const before = await readFile(store.file, 'utf8');
+    expect((await call('POST', '/api/tasks', { ...newTask('Task'), materials: [{ id: 'm', url, summary: '' }] })).statusCode).toBe(422);
+    expect(await readFile(store.file, 'utf8')).toBe(before);
+  });
+  it('rejects invalid nested records and duplicate IDs, including externally edited files', async () => {
+    expect((await call('POST', '/api/tasks', { ...newTask('Task'), subtasks: [{ id: 's', name: '   ', complete: false }] })).statusCode).toBe(400);
+    expect((await call('POST', '/api/tasks', { ...newTask('Task'), chats: [{ id: 'c', url: 'https://example.com', summary: '', injected: true }] })).statusCode).toBe(400);
+    const bad = { ...newTask('Task', 't'), subtasks: [{ id: 's', name: 'A', complete: false }, { id: 's', name: 'B', complete: false }] };
+    expect((await call('POST', '/api/tasks', bad)).statusCode).toBe(422);
+    await writeFile(store.file, JSON.stringify({ ...emptyData(), tasks: [bad] }));
+    const before = await readFile(store.file, 'utf8');
+    expect((await call('GET', '/api/data')).statusCode).toBe(422);
+    expect((await call('PUT', '/api/settings', { timeStep: 30 })).statusCode).toBe(422);
+    expect(await readFile(store.file, 'utf8')).toBe(before);
+  });
+  it('saves all detail fields when atomically creating an Outcome', async () => {
+    const task = { ...newTask('Task'), materials: [{ id: 'm', url: 'https://example.com', summary: '資料' }], nextAction: '整理する' };
+    const result = await call('POST', '/api/tasks/with-outcome', { task, newOutcomeName: '成果' });
+    expect(result.statusCode).toBe(200); const data: Data = result.json();
+    expect(data.tasks[0].materials).toEqual(task.materials); expect(data.tasks[0].outcomeId).toBe(data.outcomes[0].id);
+  });
+});
+
+describe('completion history and legacy Outcome compatibility', () => {
+  it('persists the previous status across completion, reload and clients omitting history', async () => {
+    let data = (await call('POST', '/api/tasks', { ...newTask('復元Task'), status: 'Waiting' })).json() as Data;
+    const task = data.tasks[0];
+    data = (await call('PUT', `/api/tasks/${task.id}`, { ...task, status: 'Done' })).json();
+    expect(data.tasks[0].previousStatus).toBe('Waiting');
+    expect((await new Store(directory).read()).tasks[0].previousStatus).toBe('Waiting');
+    data = (await call('PUT', `/api/tasks/${task.id}`, { ...task, status: 'Doing' })).json();
+    expect(data.tasks[0].previousStatus).toBe('Waiting');
+    data = (await call('PUT', `/api/tasks/${task.id}`, { ...task, status: 'Done' })).json();
+    expect(data.tasks[0].previousStatus).toBe('Doing');
+    expect((await call('PUT', `/api/tasks/${task.id}`, { ...task, previousStatus: 'Done' })).statusCode).toBe(400);
+  });
+  it('reads legacy priority without rewriting and creates Outcomes without priority', async () => {
+    const legacy = { ...newOutcome('旧Outcome', 'legacy'), priority: 'High' as const };
+    await writeFile(store.file, JSON.stringify({ ...emptyData(), outcomes: [legacy] }));
+    const bytes = await readFile(store.file, 'utf8');
+    expect((await call('GET', '/api/data')).json().outcomes[0].priority).toBe('High');
+    expect(await readFile(store.file, 'utf8')).toBe(bytes);
+    const data = (await call('POST', '/api/outcomes', newOutcome('新Outcome'))).json();
+    expect(data.outcomes[1]).not.toHaveProperty('priority');
+    expect(data.outcomes[0].priority).toBe('High');
+  });
 });

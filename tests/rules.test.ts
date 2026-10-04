@@ -44,3 +44,13 @@ describe('data specification and rules', () => {
     expect(result.map(x => [x.column, x.columns])).toEqual([[0, 2], [1, 2], [0, 2], [0, 1]]);
   });
 });
+
+describe('grouped months and weekday dates', () => {
+  it('groups leap-day and year boundaries without losing columns', async () => {
+    const { monthSegments, rangeText } = await import('../src/shared/model.js');
+    expect(monthSegments(['2028-02-28', '2028-02-29', '2028-03-01'])).toEqual([{ month: '2028-02', offset: 0, count: 2 }, { month: '2028-03', offset: 2, count: 1 }]);
+    expect(monthSegments(['2026-12-31', '2027-01-01'])).toEqual([{ month: '2026-12', offset: 0, count: 1 }, { month: '2027-01', offset: 1, count: 1 }]);
+    expect(rangeText({ start: '2028-02-29', end: '2028-03-01' })).toBe('2/29(火) 〜 3/1(水)');
+    expect(rangeText({ start: 'before', end: 'after' })).toBe('以前 〜 以降');
+  });
+});
