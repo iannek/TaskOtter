@@ -111,3 +111,27 @@ button.outcome-label{width:100%;text-align:left;border-top:1px solid #bed1ed;col
 }
 .calendar-full-tooltip strong{display:block;font-size:12px;color:#648096;margin-bottom:6px}
 .calendar-full-tooltip p{margin:0}
+
+/* Direct calendar editing: blank space keeps the normal arrow cursor. */
+.calendar-actions{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:13px;color:#718198}
+
+.calendar-actions label{display:flex;align-items:center;gap:8px}
+.calendar-actions select{border:1px solid var(--line);border-radius:6px;background:white;padding:6px;color:var(--ink)}
+.calendar-feedback{font-size:13px;color:#5272a1;margin:0 0 10px}
+.cal-day,.schedule-day-track{cursor:default}
+.calendar-due-area,.calendar-next-area{border-radius:4px;padding:2px;background:#eaf1ff;cursor:grab;touch-action:none}
+.calendar-next-area{background:#e8f5ef}
+.calendar-due-area button,.calendar-next-area button,.schedule-event,.schedule-event button{cursor:grab;touch-action:none;user-select:none}
+.schedule-event.calendar-edge-hover,.schedule-event.calendar-edge-hover *{cursor:ns-resize!important}
+.calendar-drag-active,.calendar-drag-active *{cursor:grabbing!important;user-select:none!important}
+.calendar-resize-active,.calendar-resize-active *{cursor:ns-resize!important}
+.calendar-drag-source{opacity:.45}
+.calendar-drop-day{box-shadow:inset 0 0 0 2px #4278d2;background-color:#edf4ff!important}
+.calendar-drop-preview{position:absolute;left:2px;right:2px;border:2px dashed #4278d2;background:#edf4ffcc;color:#315b96;border-radius:4px;font-size:12px;font-weight:700;padding:2px 4px;z-index:4;pointer-events:none}
+.calendar-drag-ghost{position:fixed;width:288px;max-width:calc(100vw - 24px);padding:10px 12px;border:1px solid #83a8e3;border-radius:8px;background:#fff;box-shadow:0 8px 24px #24486c33;z-index:100;pointer-events:none;font-size:13px}
+.calendar-drag-ghost strong{display:block;color:#4278d2;margin-bottom:4px}
+.calendar-drag-ghost span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.calendar-drag-ghost.invalid{border-color:#c27878}.calendar-drag-ghost.invalid strong{color:#a55151}
+.calendar-due-static,.calendar-due-static button{cursor:pointer}
+
+.calendar-drop-preview.add-preview{height:24px;background:#edf4ff;opacity:.8;white-space:nowrap}

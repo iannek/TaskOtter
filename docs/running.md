@@ -154,3 +154,7 @@ sh scripts/run-mac.sh up "$HOME/Documents/TaskOtter data" 3000
 ```
 
 WSL Ubuntuで直接起動している場合は、Ctrl＋Cで停止 → `sh scripts/run-wsl-direct.sh build` → 同じ保存先で `sh scripts/run-wsl-direct.sh start '/使用中の保存先' 3000` を実行します。Docker方式やPowerShell方式も各起動スクリプトのstop／delete／build／upを使います。保存先の変更やJSONの初期化で画面を更新する必要はありません。
+
+## カレンダーの操作
+
+空白のダブルクリックによる追加、予定の移動と上下端の時間調整、週・月の締切移動の手順は[カレンダーの操作](calendar.md)を参照してください。更新時は上記の再ビルド・再起動を行い、現在の保存先を引き続き利用します。初期化は不要です。
