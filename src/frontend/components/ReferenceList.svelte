@@ -9,7 +9,6 @@
   }
 </script>
 <div class="section-heading"><h3>{label}</h3><button class="ghost" type="button" {disabled} onclick={() => items = [...items, { id: crypto.randomUUID(), url: '', summary: '' }]}>＋ {label === '資料リンク' ? '資料' : 'チャット'}を追加</button></div>
-<p class="form-hint">{label === '資料リンク' ? 'SharePoint・外部URL・ローカルファイル／フォルダ' : 'TeamsなどのチャットURLと、その会話の概要を記載します。'}</p>
 {#each items as entry, index (entry.id)}
   {@const target = referenceTarget(entry.url)}
   <div class="reference-box">

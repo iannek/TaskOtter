@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TaskCounts from './TaskCounts.svelte';
   import TaskCheck from './TaskCheck.svelte';
   import DatePicker from './DatePicker.svelte';
   import TimePicker from './TimePicker.svelte';
@@ -39,7 +40,7 @@
 </script>
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (表の行をEnterでも開けるようにする) -->
 <tr class="child-row" tabindex="0" aria-label={`${task.name}の詳細`} onclick={rowClick} onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(task); } }}>
-  <td class="task-name-column"><div class="task-cell"><TaskCheck {task} {disabled} {save} /><div class="task-cell-name"><button class="row-title two-line-title" title={task.name} onclick={() => open(task)}>{task.name}</button>{#if task.materials?.length || task.chats?.length || task.subtasks?.length}<div class="task-detail-counts">資料 {task.materials?.length || 0} · チャット {task.chats?.length || 0} · サブタスク {task.subtasks?.filter(row => row.complete).length || 0}/{task.subtasks?.length || 0}</div>{/if}</div></div>{#if overflow(task, outcomes)}<span class="warning">⚠ Outcomeの期間外</span>{/if}</td>
+  <td class="task-name-column"><div class="task-cell"><TaskCheck {task} {disabled} {save} /><div class="task-cell-name"><button class="row-title two-line-title" title={task.name} onclick={() => open(task)}>{task.name}</button><TaskCounts {task} /></div></div>{#if overflow(task, outcomes)}<span class="warning">⚠ Outcomeの期間外</span>{/if}</td>
   <td><select class={`inline-status badge ${task.status}`} aria-label={`${task.name}のステータス`} {disabled} onchange={changeStatus}>{#each statuses as status}<option selected={task.status === status}>{status}</option>{/each}</select></td>
   <td>{task.category || '—'}</td>
   <td><button class="inline-field" aria-label={`${task.name}の対応予定期間を編集`} aria-expanded={editing === 'range'} {disabled} onclick={() => edit('range')}>{rangeText(task)}</button></td>
@@ -63,7 +64,6 @@
         <div><span class="form-label">終了時刻</span><TimePicker label="行内の終了時刻" bind:value={to} step={timeStep} {disabled} /></div>
       {/if}
       </div>
-      {#if editing === 'range'}<p class="form-hint">開始日だけならその日以降、終了日だけならその日以前。両方空欄なら期間なし。</p>{/if}
       {#if editing === 'range' && overflow(rangeCandidate, outcomes)}<div class="form-warning" role="status">⚠ Outcomeの期間からはみ出しています。保存は可能です。</div>{/if}
       <div class="inline-edit-actions"><button type="button" class="ghost" onclick={() => { if (editing === 'range') { start = ''; end = ''; } else if (editing === 'due') due = ''; else { day = ''; from = ''; to = ''; } }}>解除</button><span class="spacer"></span><button type="button" class="secondary" onclick={() => { editing = null; message = ''; }}>キャンセル</button><button class="primary">保存</button></div>
     </fieldset>

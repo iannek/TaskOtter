@@ -1,3 +1,8 @@
+const auditProperties = {
+  createdAt: { type: 'string', format: 'date-time', maxLength: 40 },
+  updatedAt: { type: 'string', format: 'date-time', maxLength: 40 },
+  history: { type: 'array', items: { $ref: '#/definitions/historyEntry' } },
+} as const;
 // JSON Schema is the single source for both runtime validation and TypeScript types.
 export const schema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
@@ -10,6 +15,10 @@ export const schema = {
     outcomes: { type: 'array', items: { $ref: '#/definitions/outcome' } },
   },
   definitions: {
+    historyEntry: {
+      type: 'object', additionalProperties: false, required: ['at', 'summary'],
+      properties: { at: { type: 'string', format: 'date-time', maxLength: 40 }, summary: { type: 'string', minLength: 1, maxLength: 1000, pattern: '\\S' } },
+    },
     date: { anyOf: [{ const: '' }, { type: 'string', format: 'date' }] },
     start: { anyOf: [{ const: '' }, { const: 'before' }, { type: 'string', format: 'date' }] },
     end: { anyOf: [{ const: '' }, { const: 'after' }, { type: 'string', format: 'date' }] },
@@ -31,6 +40,7 @@ export const schema = {
       type: 'object', additionalProperties: false,
       required: ['id', 'name', 'memo', 'category', 'status', 'due', 'start', 'end', 'next', 'nextEnd', 'outcomeId'],
       properties: {
+        ...auditProperties,
         id: { type: 'string', minLength: 1, maxLength: 200 }, name: { type: 'string', minLength: 1, pattern: '\\S' },
         memo: { type: 'string' }, category: { type: 'string' },
         nextAction: { type: 'string' },
@@ -48,6 +58,7 @@ export const schema = {
       type: 'object', additionalProperties: false,
       required: ['id', 'name', 'memo', 'start', 'end', 'complete'],
       properties: {
+        ...auditProperties,
         id: { type: 'string', minLength: 1, maxLength: 200 }, name: { type: 'string', minLength: 1, pattern: '\\S' },
         memo: { type: 'string' }, start: { $ref: '#/definitions/date' }, end: { $ref: '#/definitions/date' },
         priority: { enum: ['High', 'Medium', 'Low'] }, complete: { type: 'boolean' },

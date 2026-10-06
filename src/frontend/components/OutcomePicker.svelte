@@ -16,7 +16,6 @@
 <svelte:window onpointerdown={outside} onkeydown={keyboard} />
 <div class="category-field" bind:this={field}>
   <button bind:this={trigger} id="outcome" type="button" class="form-input date-trigger" aria-label="Outcome" aria-expanded={expanded} {disabled} onclick={() => { expanded = !expanded; creating = false; }}><span>{newName ? `${newName}（新規）` : selected?.name || 'Outcomeを選択'}</span><span aria-hidden="true">▾</span></button>
-  <p class="form-hint">一覧から選択、または新しく作成できます。</p>
   {#if newName}<p class="form-hint">タスク保存時に作成します。期間なし・未完了。</p>{/if}
   {#if expanded}<div class="category-options" aria-label="Outcome一覧">
     {#if creating}

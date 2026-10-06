@@ -16,7 +16,7 @@ async function save(page: Page) { await page.getByRole('button', { name: /^(作�
 test.beforeEach(async () => { const directory = await readFile('test-results/data-directory.txt', 'utf8'); file = join(directory, 'taskotter.json'); await writeFile(file, JSON.stringify(emptyData())); });
 test('quick add, edit, persistence, categories and deletion', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/'); await page.getByLabel('Taskをすばやく追加').fill('最初のTask'); await page.getByRole('button', { name: '追加', exact: true }).click();
+  await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByLabel('Taskをすばやく追加').fill('最初のTask'); await page.getByRole('button', { name: '追加', exact: true }).click();
   await go(page, 'Task・Outcome'); await page.getByRole('button', { name: '最初のTask', exact: true }).click();
   await page.getByRole('button', { name: 'カテゴリ', exact: true }).click(); await page.getByRole('button', { name: '＋ 新しいカテゴリを作成', exact: true }).click(); await page.getByLabel('新しいカテゴリ名').fill('自由カテゴリ'); await page.getByRole('button', { name: 'このカテゴリを使う', exact: true }).click(); await page.getByLabel('ステータス', { exact: true }).selectOption('Doing'); await page.getByRole('tab', { name: 'メモ', exact: true }).click(); await page.getByRole('textbox', { name: 'メモ', exact: true }).fill('<script>window.evil=true</script>'); await save(page);
   await page.reload(); await go(page, 'Task・Outcome'); await expect(page.getByRole('cell', { name: '自由カテゴリ', exact: true })).toBeVisible();
@@ -45,7 +45,7 @@ test('Outcome completion and automatic clear when Task is reopened', async ({ pa
   await page.getByRole('button', { name: 'Task', exact: true }).click(); await page.getByLabel('ステータス', { exact: true }).selectOption('Inbox'); await save(page); expect(JSON.parse(await readFile(file, 'utf8')).outcomes[0].complete).toBe(false);
 });
 test('external malformed data locks editing without changing file, and repair restores it', async ({ page }) => {
-  await page.goto('/'); await page.getByRole('button', { name: '＋ Task' }).click(); await page.getByLabel('Task名', { exact: true }).fill('保存できない');
+  await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByRole('button', { name: '＋ Task' }).click(); await page.getByLabel('Task名', { exact: true }).fill('保存できない');
   await writeFile(file, '{"invalid":'); await page.getByRole('button', { name: '作成', exact: true }).click(); await expect(page.getByRole('button', { name: '作成', exact: true })).toBeDisabled(); expect(await readFile(file, 'utf8')).toBe('{"invalid":');
   await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('JSON構文エラー'); await expect(page.getByRole('button', { name: '＋ Task' })).toBeDisabled();
   const repaired = emptyData(); repaired.tasks.push(newTask('AIから追加', 'external')); await writeFile(file, JSON.stringify(repaired)); await page.getByRole('button', { name: '再読み込み' }).click(); await expect(page.getByRole('button', { name: '＋ Task' })).toBeEnabled(); await go(page, 'Task・Outcome'); await expect(page.getByRole('button', { name: 'AIから追加', exact: true })).toBeVisible();
@@ -250,14 +250,14 @@ test('month gantt fits all dates on desktop and exposes month end by scrolling o
   const lastVisible = await page.locator('.gantt-shell').evaluate(el => { const r = el.getBoundingClientRect(), last = el.querySelector('.day-head:last-child')!.getBoundingClientRect(); return last.right <= r.right + 1 && last.left >= r.left; }); expect(lastVisible).toBe(true);
 });
 
-test('four detail tabs keep drafts and persist Markdown, checklist, references and next action', async ({ page }) => {
+test('detail tabs keep drafts and persist Markdown, checklist, references and next action', async ({ page }) => {
   const data = emptyData(); data.outcomes.push(newOutcome('資料整理Outcome', 'o')); await writeFile(file, JSON.stringify(data));
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/'); await go(page, 'Task・Outcome');
   await expect(page.locator('.topbar').getByRole('button', { name: '＋ Task' })).toHaveCount(0);
   await page.getByRole('button', { name: '資料整理OutcomeにTaskを追加', exact: true }).click();
   const editor = page.locator('dialog.drawer');
-  await expect(editor.getByRole('tab')).toHaveText(['基本情報', 'メモ', '資料リンク0', '関連チャット0']);
+  await expect(editor.getByRole('tab')).toHaveText(['基本情報', 'メモ', '資料リンク0', '関連チャット0', '履歴']);
   await expect(editor.getByRole('button', { name: 'Outcome', exact: true })).toContainText('資料整理Outcome');
   await page.getByLabel('Task名', { exact: true }).fill('追加情報Task');
   await page.getByLabel('次の予定で行うこと').fill('議事録を整理する');
@@ -293,7 +293,7 @@ test('legacy task details, draft cancellation, invalid hidden fields, keyboard t
   await page.getByRole('tab', { name: /^関連チャット/ }).click(); await page.getByRole('button', { name: '＋ チャットを追加' }).click(); await page.getByRole('textbox', { name: 'リンク先（URL／パス）', exact: true }).fill('https://example.com/chat'); await page.getByRole('textbox', { name: '概要', exact: true }).fill('確認'); await save(page);
 });
 
-test('Outcome add buttons on cards and Gantt preselect the parent without opening Outcome details', async ({ page }) => {
+test('Task add rows on cards and Gantt preselect the parent without opening Outcome details', async ({ page }) => {
   const data = emptyData(); data.outcomes.push(newOutcome('追加先', 'o')); await writeFile(file, JSON.stringify(data));
   await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByRole('tab', { name: 'Outcomeカード' }).click();
   await page.getByRole('button', { name: '追加先にTaskを追加', exact: true }).click(); await expect(page.getByLabel('Task名', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Outcome', exact: true })).toContainText('追加先'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
@@ -326,7 +326,7 @@ test('approved layout keeps long titles bounded, periods aligned and weekday fie
   d.tasks.push(legacy); await writeFile(file, JSON.stringify(d));
   await page.goto('/');
   for (const view of ['ダッシュボード', 'カレンダー', 'ガントチャート', 'Task・Outcome']) {
-    await go(page, view); await expect(page.locator('.page-actions').getByRole('button')).toHaveText(['＋ Outcome', '＋ Task']);
+    await go(page, view); if (view === 'ダッシュボード') await expect(page.locator('.page-actions')).toHaveCount(0); else await expect(page.locator('.page-actions').getByRole('button')).toHaveText(['＋ Outcome', '＋ Task']);
   }
   const row = page.locator('.child-row'), title = row.locator('.row-title');
   await expect(title).toHaveAttribute('title', name);
@@ -344,7 +344,7 @@ test('approved layout keeps long titles bounded, periods aligned and weekday fie
     expect(geometry.alignment).toBeLessThan(1); expect(geometry.gap).toBeLessThanOrEqual(16); expect(geometry.width).toBeLessThanOrEqual(320); expect(geometry.clamp).toBe('2');
   }
   await title.click(); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue(name);
-  await expect(page.locator('.detail-tabs [role=tab]')).toHaveText(['基本情報', 'メモ', '資料リンク0', '関連チャット0']);
+  await expect(page.locator('.detail-tabs [role=tab]')).toHaveText(['基本情報', 'メモ', '資料リンク0', '関連チャット0', '履歴']);
 });
 
 test('completion checks restore status after reload and old Done records fall back to Inbox', async ({ page }) => {
@@ -379,4 +379,89 @@ test('completion controls save in every view and roll back a rejected write', as
   await expect(page.getByLabel('優先度', { exact: true })).toHaveCount(0);
   const heading = (await page.getByRole('heading', { name: '詳細を編集' }).boundingBox())!, complete = (await page.locator('.outcome-complete-control').boundingBox())!;
   expect(complete.x).toBeGreaterThan(heading.x + heading.width); expect(Math.abs(complete.y - heading.y)).toBeLessThan(15);
+});
+
+test('Outcome folding shares state, keeps parent details and adds Tasks at the end', async ({ page }) => {
+  const day = localDate(), d = emptyData();
+  d.outcomes.push({ ...newOutcome('開閉Outcome', 'o'), start: day, end: addDays(day, 3) }, newOutcome('空Outcome', 'empty'));
+  d.tasks.push({ ...newTask('子Task', 't'), outcomeId: 'o', start: day, end: day }, newTask('未分類Task', 'u'));
+  await writeFile(file, JSON.stringify(d)); const original = await readFile(file, 'utf8');
+  await page.goto('/'); await go(page, 'Task・Outcome');
+  await expect(page.locator('.group-row .task-add-action')).toHaveCount(0);
+  const child = (await page.locator('.child-row').first().boundingBox())!, add = (await page.getByRole('button', { name: '開閉OutcomeにTaskを追加', exact: true }).boundingBox())!;
+  expect(add.y).toBeGreaterThan(child.y + child.height);
+  await expect(page.locator('.hierarchy-headings span')).toHaveText(['Outcome', 'Task']);
+  await page.getByRole('button', { name: '開閉Outcomeを折りたたむ', exact: true }).click();
+  await expect(page.locator('.child-row')).toHaveCount(1); await expect(page.getByRole('button', { name: '開閉OutcomeにTaskを追加', exact: true })).toHaveCount(0);
+  await expect(page.locator('.group-period').first()).toContainText(dateLabel(day));
+  await page.getByRole('button', { name: '開閉Outcome', exact: true }).click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('開閉Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.outcome-card').first().locator('.task-row')).toHaveCount(0);
+  await go(page, 'ガントチャート'); await expect(page.locator('.gantt-label.child')).toHaveCount(1); await expect(page.locator('.task-track')).toHaveCount(1);
+  await page.getByRole('button', { name: '開閉Outcomeを展開する', exact: true }).focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('.gantt-label.child')).toHaveCount(2); await expect(page.locator('.task-track')).toHaveCount(2);
+  const aligned = await page.locator('.gantt-shell').evaluate(el => {
+    const labels = [...el.querySelectorAll('.gantt-label.child')].map(x => x.getBoundingClientRect().top);
+    const tracks = [...el.querySelectorAll('.task-track')].map(x => x.getBoundingClientRect().top);
+    return labels.every((top, i) => Math.abs(top - tracks[i]) < 1);
+  }); expect(aligned).toBe(true);
+  await page.getByRole('button', { name: 'Outcomeなしを折りたたむ', exact: true }).click(); await expect(page.locator('.gantt-label.child')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'OutcomeなしにTaskを追加', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '空Outcomeを折りたたむ', exact: true }).click(); await expect(page.getByRole('button', { name: '空OutcomeにTaskを追加', exact: true })).toHaveCount(0);
+  expect(await readFile(file, 'utf8')).toBe(original);
+  await page.getByRole('button', { name: '再読み込み', exact: true }).click(); await go(page, 'Task・Outcome'); await page.getByRole('tab', { name: '階層一覧', exact: true }).click(); await expect(page.locator('.child-row')).toHaveCount(2);
+  await page.getByRole('button', { name: '空OutcomeにTaskを追加', exact: true }).click(); await expect(page.getByRole('button', { name: 'Outcome', exact: true })).toContainText('空Outcome'); await page.getByLabel('Task名', { exact: true }).fill('追加したTask'); await save(page);
+  expect(JSON.parse(await readFile(file, 'utf8')).tasks.find((t: { name: string }) => t.name === '追加したTask').outcomeId).toBe('empty');
+  await page.getByRole('button', { name: 'OutcomeなしにTaskを追加', exact: true }).click(); await expect(page.getByRole('button', { name: 'Outcome', exact: true })).toContainText('Outcomeを選択'); await page.getByLabel('Task名', { exact: true }).fill('未分類追加Task'); await save(page); expect(JSON.parse(await readFile(file, 'utf8')).tasks.find((t: { name: string }) => t.name === '未分類追加Task').outcomeId).toBe('');
+});
+
+test('default counts and existing dashboard and calendar dates survive the UI changes', async ({ page }) => {
+  const day = localDate(), d = emptyData(); d.tasks.push({ ...newTask('0件Task', 't'), start: day, end: day, due: day, next: `${day}T09:00`, nextEnd: '10:00', nextAction: '確認する' });
+  await writeFile(file, JSON.stringify(d)); await page.goto('/');
+  await expect(page.locator('.page-head .eyebrow,.page-head .page-subtitle,.page-actions,.quick-add')).toHaveCount(0);
+  await expect(page.locator('.grid-2 .panel').first()).toContainText(`${dateLabel(day)}09:00–10:00`);
+  await expect(page.locator('.grid-2 .panel').last()).toContainText(`${dateLabel(day)} 〜 ${dateLabel(day)}`);
+  await expect(page.locator('.task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0', '資料 0 · チャット 0 · サブタスク 0/0']);
+  await chooseDate(page, '予定の絞り込み開始日', addDays(day, 1)); await expect(page.locator('.grid-2 .panel').first().locator('.task-row')).toHaveCount(0); await page.getByRole('button', { name: '解除', exact: true }).click(); await expect(page.locator('.grid-2 .panel').first().locator('.task-row')).toHaveCount(1);
+  await go(page, 'Task・Outcome'); await expect(page.locator('.child-row .task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0']);
+  await expect(page.getByLabel('Taskをすばやく追加')).toBeVisible(); await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.task-row .task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0']);
+  await go(page, 'ガントチャート'); await expect(page.locator('.gantt-label.child .task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0']);
+  await go(page, 'カレンダー'); await expect(page.locator('.cal-day')).toHaveCount(42); await expect(page.locator('.cal-event.due')).toHaveCount(1); await expect(page.locator('.cal-event.next')).toHaveCount(1); await expect(page.locator('.calendar-task-copy .task-detail-counts')).toHaveCount(2);
+  await page.getByRole('button', { name: '週', exact: true }).click(); await expect(page.locator('.schedule-day-track')).toHaveCount(7); await expect(page.locator('.schedule-event')).toHaveCount(1); await expect(page.locator('.schedule-day-head .task-detail-counts')).toHaveCount(1); await expect(page.locator('.schedule-event .task-detail-counts')).toHaveCount(1);
+  await page.getByRole('button', { name: '日', exact: true }).click(); await expect(page.locator('.schedule-day-track')).toHaveCount(1); await expect(page.locator('.schedule-event')).toHaveCount(1); await page.getByRole('button', { name: '次の期間', exact: true }).click(); await expect(page.locator('.schedule-day-head strong')).toHaveText([dateLabel(addDays(day, 1))]);
+  await page.getByRole('button', { name: '今日', exact: true }).click(); await expect(page.locator('.schedule-event')).toHaveCount(1);
+  await expect(page.locator('.page-head .eyebrow,.page-head .page-subtitle')).toHaveCount(0);
+});
+
+test('timestamps and concise history persist without table columns or unchanged-save entries', async ({ page }) => {
+  await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByRole('button', { name: '＋ Task', exact: true }).click();
+  await expect(page.locator('.audit-meta')).toContainText('作成時に自動記録'); await page.getByLabel('Task名', { exact: true }).fill('履歴Task'); await save(page);
+  let data = JSON.parse(await readFile(file, 'utf8')), task = data.tasks[0]; expect(task.history).toHaveLength(1); expect(task.createdAt).toBe(task.updatedAt);
+  await page.getByRole('button', { name: '履歴Task', exact: true }).click(); await expect(page.locator('.audit-meta time')).toHaveCount(2);
+  await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry')).toHaveCount(1); await expect(page.locator('.history-entry')).toContainText('Taskを作成');
+  await page.getByRole('tab', { name: '基本情報', exact: true }).click(); await page.getByLabel('ステータス', { exact: true }).selectOption('Doing');
+  await page.getByRole('tab', { name: 'メモ', exact: true }).click(); await page.getByRole('textbox', { name: 'メモ', exact: true }).fill('長い本文'.repeat(100));
+  await page.getByRole('tab', { name: '履歴', exact: true }).click(); await save(page);
+  await page.getByRole('button', { name: '履歴Task', exact: true }).click(); await page.getByRole('tab', { name: '履歴', exact: true }).click();
+  await expect(page.locator('.history-entry')).toHaveCount(2); await expect(page.locator('.history-entry').first()).toContainText('メモを変更、ステータス：Inbox → Doing'); await expect(page.locator('.history-list')).not.toContainText('長い本文');
+  await save(page); data = JSON.parse(await readFile(file, 'utf8')); expect(data.tasks[0].history).toHaveLength(2); expect(data.tasks[0].createdAt).toBe(task.createdAt);
+  await page.reload(); await go(page, 'Task・Outcome'); await expect(page.locator('thead')).not.toContainText('作成日'); await expect(page.locator('thead')).not.toContainText('更新日');
+  await page.getByRole('button', { name: '履歴Task', exact: true }).click(); await page.getByRole('tab', { name: '基本情報', exact: true }).focus(); await page.keyboard.press('End'); await expect(page.getByRole('tab', { name: '履歴', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.history-entry')).toHaveCount(2); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.getByRole('button', { name: '＋ Outcome', exact: true }).click(); await page.getByLabel('Outcome名', { exact: true }).fill('履歴Outcome'); await save(page);
+  await page.getByRole('button', { name: '履歴Outcome', exact: true }).click(); await expect(page.locator('dialog.drawer').getByRole('tab')).toHaveText(['基本情報', '履歴']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry')).toContainText('Outcomeを作成');
+  await page.getByRole('tab', { name: '基本情報', exact: true }).click(); await page.getByLabel('Outcome名', { exact: true }).fill('更新Outcome'); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await save(page);
+  await page.getByRole('button', { name: '更新Outcome', exact: true }).click(); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry').first()).toContainText('名前を変更');
+});
+
+test('local controls remain usable and legacy audit data is unknown and safely displayed', async ({ page }) => {
+  const d = emptyData(); d.tasks.push(newTask('旧日時Task', 't')); d.outcomes.push(newOutcome('旧日時Outcome', 'o')); await writeFile(file, JSON.stringify(d));
+  await page.goto('/'); await expect(page.locator('.topbar')).toHaveCount(0); await expect(page.locator('.app')).not.toContainText(/workspace/i);
+  await expect(page.locator('.sidebar-bottom')).toContainText('LOCAL · JSON'); await page.getByLabel('時刻の選択間隔').selectOption('30'); await expect(page.getByRole('status')).toContainText('設定を保存');
+  await go(page, 'Task・Outcome'); await page.getByRole('button', { name: '旧日時Task', exact: true }).click(); await expect(page.locator('.audit-meta dd')).toHaveText(['不明', '不明']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-empty')).toContainText('履歴はまだありません'); await save(page);
+  expect(JSON.parse(await readFile(file, 'utf8')).tasks[0].history).toBeUndefined();
+  await page.getByRole('button', { name: '旧日時Outcome', exact: true }).click(); await expect(page.locator('.audit-meta dd')).toHaveText(['不明', '不明']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-empty')).toBeVisible(); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  const external = JSON.parse(await readFile(file, 'utf8')); external.tasks[0].history = [{ at: '2026-10-01T01:00:00Z', summary: '<img src=x onerror=window.evil=true>' }]; await writeFile(file, JSON.stringify(external));
+  await page.setViewportSize({ width: 390, height: 844 }); await expect(page.locator('.mobile-local-controls').getByRole('button', { name: '再読み込み', exact: true })).toBeVisible(); await page.getByRole('button', { name: '再読み込み', exact: true }).click();
+  await page.getByRole('button', { name: '旧日時Task', exact: true }).click(); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry')).toContainText('<img src=x'); await expect(page.locator('.history-list img')).toHaveCount(0); expect(await page.evaluate(() => (window as Window & { evil?: boolean }).evil)).toBeUndefined();
+  const fits = await page.locator('.detail-tabs').evaluate(el => el.scrollWidth <= el.clientWidth + 1); expect(fits).toBe(true);
 });

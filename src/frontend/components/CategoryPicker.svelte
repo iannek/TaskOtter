@@ -14,7 +14,6 @@
 <svelte:window onpointerdown={outside} onkeydown={keyboard} />
 <div class="category-field" bind:this={field}>
   <button bind:this={trigger} id="category" type="button" class="form-input date-trigger" aria-label="カテゴリ" aria-expanded={expanded} {disabled} onclick={() => { expanded = !expanded; creating = false; }}><span>{value || 'カテゴリを選択'}</span><span aria-hidden="true">▾</span></button>
-  <p class="form-hint">一覧から選択、または新しく作成できます。</p>
   {#if expanded}
     <div class="category-options" aria-label="カテゴリ一覧">
       {#if creating}

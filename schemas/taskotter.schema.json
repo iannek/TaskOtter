@@ -42,6 +42,27 @@
     }
   },
   "definitions": {
+    "historyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "summary"
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 40
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        }
+      }
+    },
     "date": {
       "anyOf": [
         {
@@ -146,6 +167,22 @@
         "outcomeId"
       ],
       "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 40
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 40
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/historyEntry"
+          }
+        },
         "id": {
           "type": "string",
           "minLength": 1,
@@ -236,6 +273,22 @@
         "complete"
       ],
       "properties": {
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 40
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 40
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/historyEntry"
+          }
+        },
         "id": {
           "type": "string",
           "minLength": 1,

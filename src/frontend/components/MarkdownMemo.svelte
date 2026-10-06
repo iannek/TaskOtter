@@ -24,4 +24,4 @@
 <div class="section-heading"><h3>メモ</h3><span class="badge">Markdown</span></div>
 <div class="memo-modes" aria-label="メモの表示"><button type="button" class:active={!preview} aria-pressed={!preview} onclick={() => preview = false}>編集</button><button type="button" class:active={preview} aria-pressed={preview} onclick={() => preview = true}>プレビュー</button></div>
 {#if preview}<div class="markdown-body">{@html html}</div>{#if !value}<p class="empty">メモはまだありません。</p>{/if}
-{:else}<label for="memo" class="form-label">メモ</label><textarea id="memo" class="form-textarea markdown-input" bind:value {disabled} placeholder="# 見出し&#10;&#10;メモをMarkdownで記載"></textarea><p class="form-hint">見出し・箇条書き・チェックリスト・表・コード・リンクを使えます。</p>{/if}
+{:else}<label for="memo" class="form-label">メモ</label><textarea id="memo" class="form-textarea markdown-input" bind:value {disabled} placeholder="# 見出し&#10;&#10;メモをMarkdownで記載"></textarea>{/if}

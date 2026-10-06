@@ -1,6 +1,7 @@
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { recordHistory } from './history.js';
 import { emptyData, type Data } from '../shared/model.js';
 import { DataError, validateData } from '../shared/validation.js';
 export class Store {
@@ -23,7 +24,10 @@ export class Store {
   async change(operation: (data: Data) => void): Promise<Data> {
     const action = this.queue.then(async () => {
       const data = await this.read();
-      operation(data); validateData(data);
+      const before = structuredClone(data);
+      operation(data);
+      recordHistory(before, data); validateData(data);
+      if (JSON.stringify(before) === JSON.stringify(data)) return data;
       const temporary = join(this.directory, `.taskotter-${randomUUID()}.tmp`);
       try {
         const handle = await open(temporary, 'wx', 0o600);

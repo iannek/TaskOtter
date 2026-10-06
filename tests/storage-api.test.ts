@@ -99,7 +99,7 @@ describe('task detail extensions', () => {
       materials: [{ id: 'm', url: 'C:\\Users\\User\\資料 [test]\\報告.xlsx', summary: 'ローカル資料' }],
       chats: [{ id: 'c', url: 'https://teams.microsoft.com/l/message/test', summary: '相談' }] };
     expect((await call('PUT', '/api/tasks/legacy', details)).statusCode).toBe(200);
-    expect((await new Store(directory).read()).tasks[0]).toEqual(details);
+    expect((await new Store(directory).read()).tasks[0]).toMatchObject(details);
     expect((await call('PUT', '/api/tasks/legacy', { ...details, status: 'Doing' })).json().tasks[0].materials).toEqual(details.materials);
     expect((await store.read()).tasks[0].status).toBe('Doing'); // Completing a checklist does not complete its Task.
   });
@@ -149,5 +149,72 @@ describe('completion history and legacy Outcome compatibility', () => {
     const data = (await call('POST', '/api/outcomes', newOutcome('新Outcome'))).json();
     expect(data.outcomes[1]).not.toHaveProperty('priority');
     expect(data.outcomes[0].priority).toBe('High');
+  });
+});
+
+describe('automatic timestamps and concise update history', () => {
+  it('creates timestamps and history centrally, ignoring supplied metadata', async () => {
+    const fake = { createdAt: '2000-01-01T00:00:00Z', updatedAt: '2000-01-01T00:00:00Z', history: [{ at: '2000-01-01T00:00:00Z', summary: '偽の履歴' }] };
+    for (const [kind, item] of [['tasks', newTask('Task')], ['outcomes', newOutcome('Outcome')]] as const) {
+      const response = await call('POST', `/api/${kind}`, { ...item, ...fake }); expect(response.statusCode).toBe(200);
+      const saved = response.json()[kind].at(-1);
+      expect(saved.createdAt).toMatch(/Z$/); expect(saved.createdAt).not.toBe(fake.createdAt); expect(saved.updatedAt).toBe(saved.createdAt);
+      expect(saved.history).toEqual([{ at: saved.createdAt, summary: `${kind === 'tasks' ? 'Task' : 'Outcome'}を作成` }]);
+    }
+  });
+  it('preserves metadata when omitted or forged, and does not record an unchanged save', async () => {
+    const task = (await call('POST', '/api/tasks', newTask('Task'))).json().tasks[0];
+    const bytes = await readFile(store.file, 'utf8');
+    const { createdAt, updatedAt, history, ...body } = task;
+    expect((await call('PUT', `/api/tasks/${task.id}`, body)).json().tasks[0]).toEqual(task);
+    expect(await readFile(store.file, 'utf8')).toBe(bytes);
+    const result = (await call('PUT', `/api/tasks/${task.id}`, { ...body, createdAt: '2000-01-01T00:00:00Z', history: [], status: 'Doing', memo: '大量の本文'.repeat(5000) })).json().tasks[0];
+    expect(result.createdAt).toBe(createdAt); expect(result.history).toHaveLength(2);
+    expect(result.history[1].summary).toBe('メモを変更、ステータス：Inbox → Doing');
+    expect(result.history[1].summary).not.toContain('大量の本文'); expect(result.updatedAt).toBe(result.history[1].at);
+    expect((await new Store(directory).read()).tasks[0]).toEqual(result);
+  });
+  it('reads legacy data without writing or fabricating a creation date', async () => {
+    const legacy = { ...emptyData(), tasks: [newTask('旧Task', 't')], outcomes: [newOutcome('旧Outcome', 'o')] };
+    await writeFile(store.file, JSON.stringify(legacy)); const bytes = await readFile(store.file, 'utf8');
+    expect((await call('GET', '/api/data')).json()).toEqual(legacy); expect(await readFile(store.file, 'utf8')).toBe(bytes);
+    expect((await call('PUT', '/api/tasks/t', legacy.tasks[0])).json().tasks[0]).not.toHaveProperty('history');
+    const task = (await call('PUT', '/api/tasks/t', { ...legacy.tasks[0], due: '2028-02-29' })).json().tasks[0];
+    expect(task).not.toHaveProperty('createdAt'); expect(task.history).toHaveLength(1); expect(task.history[0].summary).toBe('締切日：未設定 → 2028/2/29(火)');
+  });
+  it('treats empty optional fields as unchanged when saving a legacy record', async () => {
+    const legacy = newTask('Task', 't'); delete legacy.materials; delete legacy.chats; delete legacy.subtasks; delete legacy.nextAction;
+    await writeFile(store.file, JSON.stringify({ ...emptyData(), tasks: [legacy] }));
+    const task = (await call('PUT', '/api/tasks/t', { ...legacy, materials: [], chats: [], subtasks: [], nextAction: '' })).json().tasks[0];
+    expect(task).not.toHaveProperty('history'); expect(task).not.toHaveProperty('updatedAt');
+  });
+  it('records item changes, completion and order without long reference contents', async () => {
+    let task = (await call('POST', '/api/tasks', { ...newTask('Task'), materials: [{ id: 'a', url: 'https://example.com/a', summary: 'a' }, { id: 'b', url: 'https://example.com/b', summary: 'b' }], subtasks: [{ id: 's', name: '調査', complete: false }] })).json().tasks[0];
+    task = (await call('PUT', `/api/tasks/${task.id}`, { ...task, materials: [{ ...task.materials[0], url: 'https://example.com/new', summary: '説明'.repeat(2000) }, task.materials[1]], subtasks: [{ ...task.subtasks[0], complete: true }] })).json().tasks[0];
+    expect(task.history.at(-1).summary).toBe('資料のリンク先を1件変更、資料の概要を1件変更、サブタスクを1件完了');
+    task = (await call('PUT', `/api/tasks/${task.id}`, { ...task, materials: [...task.materials].reverse() })).json().tasks[0]; expect(task.history.at(-1).summary).toBe('資料の順序を変更');
+    task = (await call('PUT', `/api/tasks/${task.id}`, { ...task, materials: [task.materials[0]], chats: [{ id: 'c', url: 'https://example.com/chat', summary: '' }] })).json().tasks[0];
+    expect(task.history.at(-1).summary).toBe('資料を1件削除、関連チャットを1件追加');
+  });
+  it('records automatic parent completion clear and unlink on deletion', async () => {
+    let data = (await call('POST', '/api/outcomes', { ...newOutcome('Outcome'), complete: true })).json() as Data; const outcome = data.outcomes[0];
+    data = (await call('POST', '/api/tasks', { ...newTask('Task'), outcomeId: outcome.id })).json(); const task = data.tasks[0];
+    expect(data.outcomes[0].history?.at(-1)?.summary).toBe('完了：完了 → 未完了');
+    expect(data.outcomes[0].updatedAt).toBe(task.createdAt);
+    data = (await call('DELETE', `/api/outcomes/${outcome.id}`)).json();
+    expect(data.tasks[0].history?.at(-1)?.summary).toBe('Outcome：Outcome → Outcomeなし'); expect(data.tasks[0].outcomeId).toBe('');
+  });
+  it('records combined creation in the same commit and settings changes leave history alone', async () => {
+    const data = (await call('POST', '/api/tasks/with-outcome', { task: newTask('Task'), newOutcomeName: 'Outcome' })).json() as Data;
+    expect(data.tasks[0].createdAt).toBe(data.outcomes[0].createdAt);
+    expect(data.tasks[0].history?.[0].summary).toBe('Taskを作成'); expect(data.outcomes[0].history?.[0].summary).toBe('Outcomeを作成');
+    const changed = (await call('PUT', '/api/settings', { timeStep: 30 })).json(); expect(changed.tasks).toEqual(data.tasks); expect(changed.outcomes).toEqual(data.outcomes);
+  });
+  it('does not commit history after a failed write or a rejected update', async () => {
+    const task = (await call('POST', '/api/tasks', newTask('Task'))).json().tasks[0]; const bytes = await readFile(store.file, 'utf8');
+    vi.mocked(rename).mockRejectedValueOnce(new Error('failure'));
+    expect((await call('PUT', `/api/tasks/${task.id}`, { ...task, name: '更新' })).statusCode).toBe(500); expect(await readFile(store.file, 'utf8')).toBe(bytes);
+    expect((await call('PUT', `/api/tasks/${task.id}`, { ...task, start: '2026-10-06', end: '' })).statusCode).toBe(422); expect(await readFile(store.file, 'utf8')).toBe(bytes);
+    expect((await call('POST', '/api/tasks', { ...newTask('Task'), updatedAt: 'not-a-date' })).statusCode).toBe(400);
   });
 });

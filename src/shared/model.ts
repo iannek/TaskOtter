@@ -48,3 +48,8 @@ export function monthSegments(days: string[]): { month: string; offset: number; 
   }
   return result;
 }
+export function dateTimeLabel(value?: string): string {
+  if (!value) return '不明';
+  const date = new Date(value);
+  return `${date.getFullYear()}/${dateLabel(localDate(date))} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
