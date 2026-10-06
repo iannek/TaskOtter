@@ -15,7 +15,7 @@ let view = $state('dashboard'), tab = $state('list'), quickName = $state(''), se
 let collapsedOutcomes = $state<string[]>([]);
 function isExpanded(id: string) { return !collapsedOutcomes.includes(id); }
 function toggleOutcome(id: string) { collapsedOutcomes = isExpanded(id) ? [...collapsedOutcomes, id] : collapsedOutcomes.filter(value => value !== id); }
-let sidebarWidth = $state(470), showDone = $state(false);
+let sidebarWidth = $state(560), showDone = $state(false);
 let editor = $state<{ kind: 'tasks' | 'outcomes'; item: Task | Outcome } | null>(null);
 const nav = [['dashboard', '◫', 'ダッシュボード'], ['tasks', '☷', 'Task・Outcome'], ['gantt', '▥', 'ガントチャート'], ['calendar', '▦', 'カレンダー']];
 let disabled = $derived(blocked || loading || busy);

@@ -14,7 +14,7 @@ let days = $derived.by(() => {
   return Array.from({ length: mode === 'month' ? 42 : 7 }, (_, i) => addDays(localDate(d), i));
 });
 let layouts = $derived(days.map(day => layoutSchedule(schedules(day))));
-let trackWidth = $derived(Math.max(120, ...layouts.map(events => Math.max(1, ...events.map(event => event.columns)) * 80)));
+let trackWidth = $derived(Math.max(150, ...layouts.map(events => Math.max(1, ...events.map(event => event.columns)) * 100)));
 function move(direction: number) {
   const d = new Date(`${cursor}T12:00`);
   if (mode === 'month') { d.setDate(1); d.setMonth(d.getMonth() + direction); cursor = localDate(d); }

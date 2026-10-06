@@ -9,7 +9,7 @@
   import CategoryPicker from './CategoryPicker.svelte';
   import OutcomePicker from './OutcomePicker.svelte';
   import { statuses, dateTimeLabel, newTask, overflow, type Task, type Outcome, type Data } from '../../shared/model.js';
-  let { kind, item, data, busy, disabled, save, remove, close, width = $bindable(470) }: { kind: 'tasks' | 'outcomes'; item: Task | Outcome; data: Data; busy: boolean; disabled: boolean; save: (item: Task | Outcome, newOutcomeName?: string) => Promise<void>; remove: () => Promise<void>; close: () => void; width?: number } = $props();
+  let { kind, item, data, busy, disabled, save, remove, close, width = $bindable(560) }: { kind: 'tasks' | 'outcomes'; item: Task | Outcome; data: Data; busy: boolean; disabled: boolean; save: (item: Task | Outcome, newOutcomeName?: string) => Promise<void>; remove: () => Promise<void>; close: () => void; width?: number } = $props();
   let draft = $state(untrack(() => structuredClone(kind === 'tasks' ? { ...newTask(), ...$state.snapshot(item) } : $state.snapshot(item))));
   let task = $derived(draft as Task);
   let outcome = $derived(draft as Outcome);
