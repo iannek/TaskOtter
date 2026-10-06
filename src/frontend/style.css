@@ -87,3 +87,27 @@ button.outcome-label{width:100%;text-align:left;border-top:1px solid #bed1ed;col
   .detail-tabs{gap:10px;padding-left:20px;padding-right:20px}
   .detail-tabs button{font-size:13px}.detail-tabs span{font-size:12px}
 }
+
+/* Calendar names stay compact; a tooltip contains the complete text. */
+.calendar-month{overflow:auto}
+.calendar-month .calendar-grid{min-width:700px}
+.calendar-task-copy .cal-event,.calendar-task-copy .schedule-due,.calendar-task-copy .schedule-event-open{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  width:100%;white-space:normal;overflow:hidden;text-overflow:ellipsis;
+  overflow-wrap:anywhere;font-size:14px;line-height:20px;max-height:44px;padding:2px 4px;
+}
+.schedule-grid{grid-template-rows:auto 2304px;grid-template-columns:68px repeat(var(--days),minmax(240px,1fr))}
+.schedule-hour-gutter,.schedule-day-track{height:2304px}
+.schedule-day-track{background:repeating-linear-gradient(to bottom,transparent 0,transparent 95px,#e5eaf0 95px,#e5eaf0 96px)}
+.schedule-event{overflow:hidden;padding:1px 2px;min-height:0;white-space:normal}
+.schedule-event .calendar-task-copy{overflow:hidden}
+.calendar-task-copy .schedule-event-open{padding:0;max-height:40px}
+.schedule-event.short-event .schedule-event-open{-webkit-line-clamp:1;max-height:20px}
+.calendar-full-tooltip{
+  position:fixed;z-index:60;width:max-content;max-width:min(440px,calc(100vw - 24px));
+  max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;
+  background:#fff;border:1px solid #cbd7e6;border-radius:10px;box-shadow:0 8px 28px #1b2d4d26;
+  color:#283a50;font-size:14px;line-height:1.7;overflow-wrap:anywhere;white-space:normal;
+}
+.calendar-full-tooltip strong{display:block;font-size:12px;color:#648096;margin-bottom:6px}
+.calendar-full-tooltip p{margin:0}

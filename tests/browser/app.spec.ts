@@ -425,8 +425,8 @@ test('default counts and existing dashboard and calendar dates survive the UI ch
   await go(page, 'Task・Outcome'); await expect(page.locator('.child-row .task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0']);
   await expect(page.getByLabel('Taskをすばやく追加')).toBeVisible(); await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.task-row .task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0']);
   await go(page, 'ガントチャート'); await expect(page.locator('.gantt-label.child .task-detail-counts')).toHaveText(['資料 0 · チャット 0 · サブタスク 0/0']);
-  await go(page, 'カレンダー'); await expect(page.locator('.cal-day')).toHaveCount(42); await expect(page.locator('.cal-event.due')).toHaveCount(1); await expect(page.locator('.cal-event.next')).toHaveCount(1); await expect(page.locator('.calendar-task-copy .task-detail-counts')).toHaveCount(2);
-  await page.getByRole('button', { name: '週', exact: true }).click(); await expect(page.locator('.schedule-day-track')).toHaveCount(7); await expect(page.locator('.schedule-event')).toHaveCount(1); await expect(page.locator('.schedule-day-head .task-detail-counts')).toHaveCount(1); await expect(page.locator('.schedule-event .task-detail-counts')).toHaveCount(1);
+  await go(page, 'カレンダー'); await expect(page.locator('.cal-day')).toHaveCount(42); await expect(page.locator('.cal-event.due')).toHaveCount(1); await expect(page.locator('.cal-event.next')).toHaveCount(1); await expect(page.locator('.calendar-task-copy .task-detail-counts')).toHaveCount(0);
+  await page.getByRole('button', { name: '週', exact: true }).click(); await expect(page.locator('.schedule-day-track')).toHaveCount(7); await expect(page.locator('.schedule-event')).toHaveCount(1); await expect(page.locator('.schedule-day-head .task-detail-counts')).toHaveCount(0); await expect(page.locator('.schedule-event .task-detail-counts')).toHaveCount(0);
   await page.getByRole('button', { name: '日', exact: true }).click(); await expect(page.locator('.schedule-day-track')).toHaveCount(1); await expect(page.locator('.schedule-event')).toHaveCount(1); await page.getByRole('button', { name: '次の期間', exact: true }).click(); await expect(page.locator('.schedule-day-head strong')).toHaveText([dateLabel(addDays(day, 1))]);
   await page.getByRole('button', { name: '今日', exact: true }).click(); await expect(page.locator('.schedule-event')).toHaveCount(1);
   await expect(page.locator('.page-head .eyebrow,.page-head .page-subtitle')).toHaveCount(0);
@@ -464,4 +464,42 @@ test('local controls remain usable and legacy audit data is unknown and safely d
   await page.setViewportSize({ width: 390, height: 844 }); await expect(page.locator('.mobile-local-controls').getByRole('button', { name: '再読み込み', exact: true })).toBeVisible(); await page.getByRole('button', { name: '再読み込み', exact: true }).click();
   await page.getByRole('button', { name: '旧日時Task', exact: true }).click(); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry')).toContainText('<img src=x'); await expect(page.locator('.history-list img')).toHaveCount(0); expect(await page.evaluate(() => (window as Window & { evil?: boolean }).evil)).toBeUndefined();
   const fits = await page.locator('.detail-tabs').evaluate(el => el.scrollWidth <= el.clientWidth + 1); expect(fits).toBe(true);
+});
+
+
+test('calendar clamps long names and exposes safe full text on hover and focus in every mode', async ({ page }) => {
+  const day = localDate(), name = '関係部署のヒアリング結果を整理し、承認フローと担当者の引き継ぎ条件を確認する。'.repeat(8) + '<img src=x onerror=window.evil=true>';
+  const d = emptyData(); d.tasks.push({ ...newTask(name, 'long-calendar'), due: day, next: day + 'T09:00', nextEnd: '10:00', materials: [{ id: 'm', url: 'https://example.com', summary: '資料' }] });
+  await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'カレンダー');
+  for (const mode of ['月', '週', '日']) {
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await expect(page.locator('.calendar-task-copy .task-detail-counts')).toHaveCount(0);
+    const button = page.locator(mode === '月' ? '.cal-event.next' : '.schedule-event-open').first();
+    const compact = await button.evaluate(el => ({ height: el.getBoundingClientRect().height, clamp: getComputedStyle(el).webkitLineClamp, overflow: getComputedStyle(el).overflow }));
+    expect(compact.height).toBeLessThanOrEqual(44); expect(compact.clamp).toBe('2'); expect(compact.overflow).toBe('hidden'); await expect(button).not.toHaveAttribute('title');
+    await button.hover(); const tooltip = page.getByRole('tooltip'); await expect(tooltip).toBeVisible(); await expect(tooltip.locator('p')).toHaveText(name); await expect(tooltip).toContainText('09:00–10:00');
+    await expect(tooltip.locator('img')).toHaveCount(0);
+    await tooltip.hover(); await page.waitForTimeout(200); await expect(tooltip).toBeVisible();
+    await page.keyboard.press('Escape'); await expect(tooltip).toHaveCount(0);
+    await button.focus(); await expect(tooltip).toBeVisible();
+    const bounds = (await tooltip.boundingBox())!; expect(bounds.x).toBeGreaterThanOrEqual(12); expect(bounds.x + bounds.width).toBeLessThanOrEqual(1428); expect(bounds.y + bounds.height).toBeLessThanOrEqual(988);
+    await page.mouse.move(0, 0); await page.getByRole('button', { name: mode, exact: true }).focus(); await expect(tooltip).toHaveCount(0);
+    await button.click(); await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue(name); await expect(tooltip).toHaveCount(0); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  }
+  expect(await page.evaluate(() => (window as Window & { evil?: boolean }).evil)).toBeUndefined();
+});
+
+test('calendar keeps short and overlapping schedules aligned and tooltip inside a narrow screen', async ({ page }) => {
+  const day = localDate(), d = emptyData();
+  d.tasks.push({ ...newTask('長い件名'.repeat(40), 'short'), next: day + 'T09:00', nextEnd: '09:15', due: day }, { ...newTask('次の予定', 'following'), next: day + 'T09:15', nextEnd: '09:45' }, { ...newTask('並行する予定', 'overlap'), next: day + 'T09:00', nextEnd: '09:30' });
+  await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'カレンダー'); await page.getByRole('button', { name: '日', exact: true }).click();
+  const geometry = await page.locator('.schedule-event').evaluateAll(elements => elements.map(el => ({ top: parseFloat((el as HTMLElement).style.top), height: parseFloat((el as HTMLElement).style.height), left: el.getBoundingClientRect().left, width: el.getBoundingClientRect().width, overflow: getComputedStyle(el).overflow })));
+  expect(geometry[0].height).toBe(24); expect(geometry[2].top).toBe(geometry[0].top + 24); expect(geometry[1].left).toBeGreaterThan(geometry[0].left + geometry[0].width - 1); expect(geometry.every(x => x.overflow === 'hidden')).toBe(true);
+  await expect(page.locator('.short-event .schedule-event-open')).toHaveCSS('-webkit-line-clamp', '1');
+  await page.locator('.schedule-event-open').first().hover(); await expect(page.getByRole('tooltip')).toBeVisible(); await page.locator('.schedule-scroll').evaluate(el => el.scrollTop += 5); await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: '月', exact: true }).click();
+  const button = page.locator('.cal-event.due').first(); await button.focus(); await expect(page.getByRole('tooltip')).toBeVisible();
+  const rect = (await page.getByRole('tooltip').boundingBox())!; expect(rect.x).toBeGreaterThanOrEqual(12); expect(rect.x + rect.width).toBeLessThanOrEqual(378); expect(rect.y + rect.height).toBeLessThanOrEqual(832);
+  await page.keyboard.press('Escape'); await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await button.click(); await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByRole('tooltip')).toHaveCount(0);
 });
