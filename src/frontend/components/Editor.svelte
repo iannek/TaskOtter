@@ -10,7 +10,7 @@
   import OutcomePicker from './OutcomePicker.svelte';
   import { statuses, dateTimeLabel, newTask, overflow, type Task, type Outcome, type Data } from '../../shared/model.js';
   let { kind, item, data, busy, disabled, save, remove, close, width = $bindable(560) }: { kind: 'tasks' | 'outcomes'; item: Task | Outcome; data: Data; busy: boolean; disabled: boolean; save: (item: Task | Outcome, newOutcomeName?: string) => Promise<void>; remove: () => Promise<void>; close: () => void; width?: number } = $props();
-  let draft = $state(untrack(() => structuredClone(kind === 'tasks' ? { ...newTask(), ...$state.snapshot(item) } : $state.snapshot(item))));
+  let draft = $state(untrack(() => structuredClone(kind === 'tasks' ? { ...newTask(), quick: false, ...$state.snapshot(item) } : $state.snapshot(item))));
   let task = $derived(draft as Task);
   let outcome = $derived(draft as Outcome);
   let startDate = $state(untrack(() => item.start === 'before' ? '' : item.start));
@@ -20,13 +20,21 @@
   let nextEnd = $state(untrack(() => kind === 'tasks' ? (item as Task).nextEnd : ''));
   let tab = $state('basic');
   const taskTabs = [['basic', '基本情報'], ['memo', 'メモ'], ['materials', '資料リンク'], ['chats', '関連チャット'], ['history', '履歴']];
-  let tabs = $derived(kind === 'tasks' ? taskTabs : [['basic', '基本情報'], ['history', '履歴']]);
+  let tabs = $derived(kind === 'tasks' ? (task.quick ? taskTabs.filter(([key]) => ['basic', 'history'].includes(key)) : taskTabs) : [['basic', '基本情報'], ['history', '履歴']]);
   async function selectTab(value: string) { tab = value; await tick(); dialog.querySelector('.drawer-body')?.scrollTo(0, 0); }
   function tabKey(event: KeyboardEvent, index: number) {
     const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
     if (next < 0) return; event.preventDefault(); void selectTab(tabs[next][0]); document.getElementById(`editor-tab-${tab}`)?.focus();
   }
   let message = $state(''), newOutcomeName = $state('');
+  let confirmation: HTMLDialogElement;
+  function fingerprint() { return JSON.stringify({ draft, startDate, endDate, nextDate, nextStart, nextEnd, newOutcomeName }); }
+  const initialFingerprint = untrack(fingerprint);
+  function requestClose() {
+    if (busy) return;
+    if (fingerprint() === initialFingerprint) close();
+    else if (!confirmation.open) confirmation.showModal();
+  }
   let dialog: HTMLDialogElement;
   let viewport = $state(1024), resizing = $state(false);
   let resizeX = 0, resizeWidth = 0, backdropPressed = false;
@@ -48,9 +56,16 @@
   let candidate = $derived({ ...task, start: startDate || (kind === 'tasks' && endDate ? 'before' : ''), end: endDate || (kind === 'tasks' && startDate ? 'after' : '') });
   let children = $derived(item.id ? data.tasks.filter(t => t.outcomeId === item.id) : []);
   let canComplete = $derived(children.every(t => t.status === 'Done'));
-  async function submit(event: SubmitEvent) {
-    event.preventDefault(); message = '';
+  async function submit(event?: SubmitEvent) {
+    event?.preventDefault(); message = '';
     if (disabled || busy) return;
+    if (kind === 'tasks' && task.quick) {
+      if (!draft.name.trim()) { tab = 'basic'; message = '名前を入力してください。'; return; }
+      // Switching an existing Task to quick mode preserves all stored details.
+      const value = { ...(item.id ? $state.snapshot(item) : newTask()), name: draft.name.trim(), quick: true } as Task;
+      try { await save(value); } catch (e) { message = (e as Error).message; }
+      return;
+    }
     if (kind === 'outcomes' && !!startDate !== !!endDate) { tab = 'basic'; message = 'Outcomeの期間は開始日・終了日の両方を設定してください。'; return; }
     if (candidate.start && candidate.end && candidate.start !== 'before' && candidate.end !== 'after' && candidate.start > candidate.end) { tab = 'basic'; message = '終了日は開始日以降にしてください。'; return; }
     if (kind === 'tasks' && (nextDate || nextStart || nextEnd) && !(nextDate && nextStart && nextEnd)) { tab = 'basic'; message = '次の対応予定の日付・開始時刻・終了時刻をすべて指定してください。'; return; }
@@ -75,15 +90,19 @@
   }
 </script>
 <svelte:window bind:innerWidth={viewport} />
-<dialog bind:this={dialog} class="drawer" class:resizing style={`width:${actualWidth}px`} onpointerdown={(e) => backdropPressed = outside(e)} onpointerup={(e) => { if (backdropPressed && outside(e) && !busy && !resizing) close(); backdropPressed = false; }} aria-labelledby="editor-title" data-taskotter-ui="2026-10-06-history" oncancel={(e) => { e.preventDefault(); if (!busy) close(); }}>
+<dialog bind:this={dialog} class="drawer" class:resizing style={`width:${actualWidth}px`} onpointerdown={(e) => backdropPressed = outside(e)} onpointerup={(e) => { if (backdropPressed && outside(e) && !busy && !resizing) requestClose(); backdropPressed = false; }} aria-labelledby="editor-title" data-taskotter-ui="2026-10-06-history" oncancel={(e) => { e.preventDefault(); if (!busy) requestClose(); }}>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (ARIAのフォーカス可能な区切りでキーボードによる幅調整を提供する) -->
   <div class="drawer-resizer" role="separator" tabindex="0" aria-label="サイドバーの幅" aria-orientation="vertical" aria-valuemin={minimum} aria-valuemax={maximum} aria-valuenow={Math.round(actualWidth)} onpointerdown={beginResize} onpointermove={resize} onpointerup={() => resizing = false} onlostpointercapture={() => resizing = false} onkeydown={resizeKey}></div>
-  <div class="drawer-head"><div><div class="eyebrow">{kind === 'tasks' ? 'TASK' : 'OUTCOME'}</div><div class="editor-heading-line"><h2 id="editor-title">{item.id ? '詳細を編集' : '新規作成'}</h2>{#if kind === 'outcomes'}<label class="outcome-complete-control" for="complete"><input id="complete" type="checkbox" bind:checked={outcome.complete} disabled={disabled || busy || !canComplete} />完了</label>{/if}</div><dl class="audit-meta"><div><dt>作成日時</dt><dd>{#if item.createdAt}<time datetime={item.createdAt} title={item.createdAt}>{dateTimeLabel(item.createdAt)}</time>{:else}{item.id ? '不明' : '作成時に自動記録'}{/if}</dd></div><div><dt>最終更新日時</dt><dd>{#if item.updatedAt}<time datetime={item.updatedAt} title={item.updatedAt}>{dateTimeLabel(item.updatedAt)}</time>{:else}{item.id ? '不明' : '保存時に自動記録'}{/if}</dd></div></dl></div><button class="icon-button drawer-close" aria-label="閉じる" disabled={busy} onclick={close}>×</button></div>
+  <div class="drawer-head"><div><div class="eyebrow">{kind === 'tasks' ? 'TASK' : 'OUTCOME'}</div><div class="editor-heading-line"><h2 id="editor-title">{item.id ? '詳細を編集' : '新規作成'}</h2>{#if kind === 'outcomes'}<label class="outcome-complete-control" for="complete"><input id="complete" type="checkbox" bind:checked={outcome.complete} disabled={disabled || busy || !canComplete} />完了</label>{/if}</div><dl class="audit-meta"><div><dt>作成日時</dt><dd>{#if item.createdAt}<time datetime={item.createdAt} title={item.createdAt}>{dateTimeLabel(item.createdAt)}</time>{:else}{item.id ? '不明' : '作成時に自動記録'}{/if}</dd></div><div><dt>最終更新日時</dt><dd>{#if item.updatedAt}<time datetime={item.updatedAt} title={item.updatedAt}>{dateTimeLabel(item.updatedAt)}</time>{:else}{item.id ? '不明' : '保存時に自動記録'}{/if}</dd></div></dl></div><button class="icon-button drawer-close" aria-label="閉じる" disabled={busy} onclick={requestClose}>×</button></div>
   <div class="detail-tabs" role="tablist" aria-label={kind === 'tasks' ? 'Task詳細' : 'Outcome詳細'}>{#each tabs as [value, label], index}<button type="button" role="tab" id={`editor-tab-${value}`} aria-controls={`editor-panel-${value}`} aria-selected={tab === value} tabindex={tab === value ? 0 : -1} onclick={() => selectTab(value)} onkeydown={(event) => tabKey(event, index)}>{label}{#if kind === 'tasks' && (value === 'materials' || value === 'chats')}<span>{task[value]?.length || 0}</span>{/if}</button>{/each}</div>
   <form id="detail-form" class="drawer-body" onsubmit={submit}>
     <fieldset disabled={disabled || busy}>
       <div tabindex="0" id="editor-panel-basic" role="tabpanel" aria-labelledby="editor-tab-basic" hidden={tab !== 'basic'}>
-      <div class="form-group"><label class="form-label" for="edit-name">{kind === 'tasks' ? 'Task名' : 'Outcome名'}</label><textarea id="edit-name" class="form-input editor-name-input" rows="3" bind:value={draft.name}></textarea></div>
+      <div class="form-group"><label class="form-label" for="edit-name">{kind === 'tasks' ? 'Task名' : 'Outcome名'}</label><textarea id="edit-name" class="form-input editor-name-input" class:task-name-input={kind === 'tasks'} rows={kind === 'tasks' ? 1 : 3} bind:value={draft.name}></textarea></div>
+      {#if kind === 'tasks'}
+        <div class="quick-task-option"><label><input type="checkbox" bind:checked={task.quick} />数分タスク</label>{#if task.quick}<p class="form-hint">名前だけで管理します。{item.id ? '保存済みの詳細情報は保持されます。' : 'Inboxに追加します。'}</p>{/if}</div>
+      {/if}
+      {#if kind !== 'tasks' || !task.quick}
       {#if kind === 'tasks'}
         <div class="form-grid"><div class="form-group"><label for="status" class="form-label">ステータス</label><select id="status" class="form-select" bind:value={task.status}>{#each statuses as s}<option>{s}</option>{/each}</select></div><div class="form-group"><label for="category" class="form-label">カテゴリ</label><CategoryPicker bind:value={task.category} categories={data.tasks.map(t => t.category)} disabled={disabled || busy} /></div></div>
         <div class="form-group"><label for="outcome" class="form-label">Outcome</label><OutcomePicker bind:value={task.outcomeId} bind:newName={newOutcomeName} outcomes={data.outcomes} disabled={disabled || busy} />{#if task.status !== 'Done' && data.outcomes.find(o => o.id === task.outcomeId)?.complete}<div class="form-warning" role="status">このタスクを保存すると、選択したOutcomeの完了が解除されます。</div>{/if}</div>
@@ -105,6 +124,7 @@
         {#each task.subtasks || [] as entry, index (entry.id)}<div class="subtask-row"><input type="checkbox" aria-label={`サブタスク ${index + 1}の完了`} bind:checked={entry.complete} /><input class="form-input" aria-label={`サブタスク ${index + 1}の名前`} bind:value={entry.name} placeholder="サブタスク名" /><button type="button" class="link-danger" aria-label={`サブタスク ${index + 1}を削除`} onclick={() => task.subtasks = task.subtasks?.filter(row => row.id !== entry.id)}>×</button></div>{/each}
         <button class="ghost" type="button" onclick={() => task.subtasks = [...(task.subtasks || []), { id: crypto.randomUUID(), name: '', complete: false }]}>＋ サブタスクを追加</button>
       {/if}
+      {/if}
       </div>
       {#if kind === 'tasks'}
         <div tabindex="0" id="editor-panel-memo" role="tabpanel" aria-labelledby="editor-tab-memo" hidden={tab !== 'memo'}><MarkdownMemo bind:value={draft.memo} disabled={disabled || busy} /></div>
@@ -116,5 +136,9 @@
     {#if message}<div class="form-error" role="alert">{message}</div>{/if}
     {#if kind === 'outcomes' && tab === 'basic'}<div class="summary-box"><strong>紐づくTask {children.length}件</strong>{#each children as t}<p>{t.name} <span class="badge {t.status}">{t.status}</span></p>{/each}</div>{/if}
   </form>
-  <div class="drawer-foot">{#if item.id}<button class="link-danger" disabled={disabled || busy} onclick={async () => { if (confirm(kind === 'outcomes' ? 'このOutcomeを削除しますか？ Taskの紐づけのみ解除します。' : 'このTaskを削除しますか？')) { try { await remove(); } catch (e) { message = (e as Error).message; } } }}>削除</button>{/if}<span class="spacer"></span><button class="secondary" disabled={busy} onclick={close}>キャンセル</button><button class="primary" form="detail-form" disabled={disabled || busy}>{busy ? '保存中…' : item.id ? '保存' : '作成'}</button></div>
+  <div class="drawer-foot">{#if item.id}<button class="link-danger" disabled={disabled || busy} onclick={async () => { if (confirm(kind === 'outcomes' ? 'このOutcomeを削除しますか？ Taskの紐づけのみ解除します。' : 'このTaskを削除しますか？')) { try { await remove(); } catch (e) { message = (e as Error).message; } } }}>削除</button>{/if}<span class="spacer"></span><button class="secondary" disabled={busy} onclick={requestClose}>キャンセル</button><button class="primary" form="detail-form" disabled={disabled || busy}>{busy ? '保存中…' : item.id ? '保存' : '作成'}</button></div>
+  <dialog bind:this={confirmation} class="unsaved-confirm" aria-labelledby="unsaved-heading" oncancel={(e) => { e.preventDefault(); confirmation.close(); }}>
+    <h2 id="unsaved-heading">変更を保存しますか？</h2><p>保存していない変更があります。</p>
+    <div class="unsaved-actions"><button class="secondary" onclick={() => confirmation.close()}>編集を続ける</button><button class="secondary" onclick={() => { confirmation.close(); close(); }}>変更を破棄</button><button class="primary" disabled={disabled || busy} onclick={() => { confirmation.close(); void submit(); }}>保存して閉じる</button></div>
+  </dialog>
 </dialog>

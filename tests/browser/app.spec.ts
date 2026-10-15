@@ -12,6 +12,8 @@ async function chooseDate(page: Page, label: string, day: string) {
   for (let i = 0; i < Math.abs(distance); i++) await picker.getByRole('button', { name: distance < 0 ? '前の月' : '次の月', exact: true }).click();
   await picker.getByRole('button', { name: day, exact: true }).click();
 }
+async function cancelEdit(page: Page) { await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); if (await page.locator('.unsaved-confirm').isVisible()) await page.getByRole('button', { name: '変更を破棄', exact: true }).click(); }
+async function hourPixels(page: Page) { return page.locator('.schedule-scroll').evaluate(el => parseFloat(getComputedStyle(el).getPropertyValue('--hour-pixels'))); }
 async function save(page: Page) { await page.getByRole('button', { name: /^(作成|保存)$/ }).click(); await expect(page.locator('dialog')).toHaveCount(0); }
 test.beforeEach(async () => { const directory = await readFile('test-results/data-directory.txt', 'utf8'); file = join(directory, 'taskotter.json'); await writeFile(file, JSON.stringify(emptyData())); });
 test('quick add, edit, persistence, categories and deletion', async ({ page }) => {
@@ -39,7 +41,7 @@ test('create Outcome and scheduled Task, popups, warnings and all calendar modes
 });
 test('Outcome completion and automatic clear when Task is reopened', async ({ page }) => {
   const d = emptyData(); d.outcomes.push(newOutcome('成果', 'o')); d.tasks.push({ ...newTask('Task', 't'), outcomeId: 'o' }); await writeFile(file, JSON.stringify(d));
-  await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByLabel('Doneも表示').check(); await page.getByRole('button', { name: '成果', exact: true }).click(); await expect(page.getByLabel('完了', { exact: true })).toBeDisabled(); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByLabel('Doneも表示').check(); await page.getByRole('button', { name: '成果', exact: true }).click(); await expect(page.getByLabel('完了', { exact: true })).toBeDisabled(); await cancelEdit(page);
   await page.getByRole('button', { name: 'Task', exact: true }).click(); await page.getByLabel('ステータス', { exact: true }).selectOption('Done'); await save(page);
   await page.getByRole('button', { name: '成果', exact: true }).click(); await page.getByLabel('完了', { exact: true }).check(); await save(page);
   await page.getByRole('button', { name: 'Task', exact: true }).click(); await page.getByLabel('ステータス', { exact: true }).selectOption('Inbox'); await save(page); expect(JSON.parse(await readFile(file, 'utf8')).outcomes[0].complete).toBe(false);
@@ -47,7 +49,7 @@ test('Outcome completion and automatic clear when Task is reopened', async ({ pa
 test('external malformed data locks editing without changing file, and repair restores it', async ({ page }) => {
   await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByRole('button', { name: '＋ Task' }).click(); await page.getByLabel('Task名', { exact: true }).fill('保存できない');
   await writeFile(file, '{"invalid":'); await page.getByRole('button', { name: '作成', exact: true }).click(); await expect(page.getByRole('button', { name: '作成', exact: true })).toBeDisabled(); expect(await readFile(file, 'utf8')).toBe('{"invalid":');
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('JSON構文エラー'); await expect(page.getByRole('button', { name: '＋ Task' })).toBeDisabled();
+  await cancelEdit(page); await expect(page.getByRole('alert')).toContainText('JSON構文エラー'); await expect(page.getByRole('button', { name: '＋ Task' })).toBeDisabled();
   const repaired = emptyData(); repaired.tasks.push(newTask('AIから追加', 'external')); await writeFile(file, JSON.stringify(repaired)); await page.getByRole('button', { name: '再読み込み' }).click(); await expect(page.getByRole('button', { name: '＋ Task' })).toBeEnabled(); await go(page, 'Task・Outcome'); await expect(page.getByRole('button', { name: 'AIから追加', exact: true })).toBeVisible();
 });
 test('500 Tasks load and switch screens in under 5 seconds', async ({ page }) => {
@@ -70,7 +72,7 @@ test('filters and cards preserve hierarchy, dashboard includes past schedules, a
   await writeFile(file, JSON.stringify(d)); await page.goto('/'); await expect(page.locator('.metric-number')).toHaveText(['2', '2', '1']);
   await expect(page.locator('.grid-2 .panel').first().locator('.row-title').first()).toHaveText('最古の予定'); await chooseDate(page, '予定の絞り込み開始日', day); await expect(page.locator('.grid-2 .panel').first().locator('.task-row')).toHaveCount(2);
   await go(page, 'Task・Outcome'); await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.outcome-card')).toHaveCount(4); await expect(page.locator('.outcome-card').nth(2)).toContainText('最古の予定'); await page.getByRole('tab', { name: '階層一覧' }).click();
-  await page.getByLabel('Taskのカテゴリ').selectOption('カテゴリA'); await expect(page.locator('.child-row')).toHaveCount(1); await page.getByLabel('Task名を検索').fill('該当なし'); await expect(page.locator('.child-row')).toHaveCount(0);
+  await page.locator('.task-filter').filter({ hasText: 'カテゴリ：' }).locator('summary').click(); await page.getByLabel('カテゴリA', { exact: true }).check(); await page.locator('.task-filter').filter({ hasText: 'カテゴリ：' }).locator('summary').click(); await expect(page.locator('.child-row')).toHaveCount(1); await page.getByLabel('Task名を検索').fill('該当なし'); await expect(page.locator('.child-row')).toHaveCount(0);
   await go(page, 'ガントチャート'); await page.getByLabel('ガントのステータス').selectOption('Waiting'); await expect(page.locator('.gantt-label.parent')).toHaveCount(3); await expect(page.locator('.gantt-label.parent')).toContainText(['空の未完了Outcome', '親Outcome', 'Outcomeなし']);
   await go(page, 'カレンダー'); await page.getByRole('button', { name: '月', exact: true }).click(); await expect(page.locator('.cal-event.due')).toHaveCount(0); await page.getByLabel('Doneも表示').check(); await expect(page.locator('.cal-event.due')).toHaveCount(1); await page.getByRole('button', { name: '日', exact: true }).click(); await expect(page.locator('.schedule-event')).toHaveCount(2);
   const positions = await page.locator('.schedule-event').evaluateAll(elements => elements.map(el => ({ left: el.getBoundingClientRect().left, width: el.getBoundingClientRect().width })));
@@ -83,7 +85,7 @@ test('editor closes outside, resizes by dragging, and preserves its width while 
   const original = (await editor.boundingBox())!, handle = await page.getByRole('separator', { name: 'サイドバーの幅' }).boundingBox();
   await page.mouse.move(handle!.x + 4, 400); await page.mouse.down(); await page.mouse.move(handle!.x - 160, 400, { steps: 10 }); await page.mouse.up();
   const resized = (await editor.boundingBox())!; expect(resized.width).toBeGreaterThan(original.width + 150); await expect(page.getByRole('textbox', { name: 'メモ', exact: true })).toHaveValue('未保存のメモ');
-  await page.mouse.click(100, 300); await expect(editor).toHaveCount(0); expect(JSON.parse(await readFile(file, 'utf8')).tasks[0].memo).toBe('');
+  await page.mouse.click(100, 300); await expect(page.locator('.unsaved-confirm')).toBeVisible(); await page.getByRole('button', { name: '変更を破棄', exact: true }).click(); await expect(editor).toHaveCount(0); expect(JSON.parse(await readFile(file, 'utf8')).tasks[0].memo).toBe('');
   await page.getByRole('button', { name: '調整するTask', exact: true }).click(); expect((await editor.boundingBox())!.width).toBe(resized.width);
   const separator = page.getByRole('separator', { name: 'サイドバーの幅' }); await separator.focus(); await page.keyboard.press('ArrowLeft'); expect((await editor.boundingBox())!.width).toBe(resized.width + 20);
   await page.keyboard.press('Escape'); await expect(editor).toHaveCount(0);
@@ -122,7 +124,7 @@ test('sidebar padding, saved time step, and unclipped dismissible time pickers',
   }
   await page.getByRole('button', { name: '開始時刻', exact: true }).click(); await page.keyboard.press('Escape');
   await expect(page.locator('.time-popover')).toHaveCount(0); await expect(page.locator('dialog.drawer')).toBeVisible();
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await cancelEdit(page);
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: '＋ Task', exact: true }).click();
   await page.getByRole('button', { name: '終了時刻', exact: true }).click();
   const bounds = (await page.locator('.time-popover').boundingBox())!;
@@ -140,7 +142,7 @@ test('category choices, new category cancellation and one-sided task periods', a
   await page.getByRole('button', { name: '別Task', exact: true }).click();
   await page.getByRole('button', { name: 'カテゴリ', exact: true }).click(); await page.getByRole('button', { name: '＋ 新しいカテゴリを作成', exact: true }).click();
   await page.getByLabel('新しいカテゴリ名').fill('未保存カテゴリ'); await page.getByRole('button', { name: 'このカテゴリを使う', exact: true }).click();
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); expect(JSON.parse(await readFile(file, 'utf8')).tasks[1].category).toBe('既存カテゴリ');
+  await cancelEdit(page); expect(JSON.parse(await readFile(file, 'utf8')).tasks[1].category).toBe('既存カテゴリ');
   await page.getByRole('button', { name: '別Task', exact: true }).click(); await chooseDate(page, '期間開始日', day); await save(page);
   expect(JSON.parse(await readFile(file, 'utf8')).tasks[1]).toMatchObject({ start: day, end: 'after' });
   await page.getByRole('button', { name: '別Task', exact: true }).click();
@@ -152,7 +154,7 @@ test('whole row opens details and inline fields save without opening the sidebar
   const d = emptyData(), day = localDate(); d.outcomes.push({ ...newOutcome('親', 'o'), complete: true });
   d.tasks.push({ ...newTask('行編集Task', 't'), status: 'Done', outcomeId: 'o', category: '行のカテゴリ' }); await writeFile(file, JSON.stringify(d));
   await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByLabel('Doneも表示').check();
-  await page.locator('.child-row td').nth(2).click(); await expect(page.locator('dialog.drawer')).toBeVisible(); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.locator('.child-row td').nth(2).click(); await expect(page.locator('dialog.drawer')).toBeVisible(); await cancelEdit(page);
   await page.getByLabel('行編集Taskのステータス', { exact: true }).selectOption('Doing');
   await expect(page.getByRole('status')).toContainText('保存しました'); await expect(page.locator('dialog.drawer')).toHaveCount(0);
   expect(JSON.parse(await readFile(file, 'utf8')).outcomes[0].complete).toBe(false);
@@ -184,7 +186,7 @@ test('Outcome selection and atomic creation, matching fields, close placement an
   expect(close.y - editor.y).toBe(16); expect(editor.x + editor.width - close.x - close.width).toBe(16);
   await page.getByRole('button', { name: 'Outcome', exact: true }).click(); await page.getByRole('button', { name: '＋ 新しいOutcomeを作成', exact: true }).click();
   await page.getByLabel('新しいOutcome名').fill('未保存Outcome'); await page.getByRole('button', { name: 'このOutcomeを使う', exact: true }).click();
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); expect(JSON.parse(await readFile(file, 'utf8')).outcomes).toHaveLength(2);
+  await cancelEdit(page); expect(JSON.parse(await readFile(file, 'utf8')).outcomes).toHaveLength(2);
   await page.getByRole('button', { name: 'Outcome確認Task', exact: true }).click(); await page.getByRole('button', { name: 'Outcome', exact: true }).click(); await page.getByRole('button', { name: '＋ 新しいOutcomeを作成', exact: true }).click();
   await page.getByLabel('新しいOutcome名').fill('既存Outcome'); await expect(page.getByRole('button', { name: 'このOutcomeを使う', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '既存Outcome · 進行中 · existing', exact: true }).click(); await save(page);
@@ -208,8 +210,8 @@ test('new standalone Outcome excludes unassigned Tasks and cards open from their
   let saved = JSON.parse(await readFile(file, 'utf8')); expect(saved.tasks[0].outcomeId).toBe('');
   const colors = await page.locator('.table').evaluate(el => [getComputedStyle(el.querySelector('.group-row td')!).backgroundColor, getComputedStyle(el.querySelector('.child-row td')!).backgroundColor]); expect(colors[0]).not.toBe(colors[1]);
   await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.outcome-card').first()).toContainText('紐づくTaskなし');
-  await page.locator('.outcome-card .outcome-meta').click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('独立Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
-  await page.locator('.outcome-card').first().focus(); await page.keyboard.press('Enter'); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('独立Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.locator('.outcome-card .outcome-meta').click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('独立Outcome'); await cancelEdit(page);
+  await page.locator('.outcome-card').first().focus(); await page.keyboard.press('Enter'); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('独立Outcome'); await cancelEdit(page);
   saved.tasks[0].outcomeId = saved.outcomes[0].id; await writeFile(file, JSON.stringify(saved)); await page.reload(); await go(page, 'Task・Outcome'); await page.getByRole('tab', { name: 'Outcomeカード' }).click();
   await page.getByRole('button', { name: '未分類Task', exact: true }).click(); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue('未分類Task');
 });
@@ -231,12 +233,12 @@ test('gantt switches week, fortnight, calendar month and custom ranges with corr
 test('Outcome rows open from empty space and Done Tasks are hidden until requested', async ({ page }) => {
   const d = emptyData(); d.outcomes.push(newOutcome('行全体Outcome', 'o')); d.tasks.push({ ...newTask('未完了のTask', 't'), outcomeId: 'o' }, { ...newTask('完了したTask', 'done'), status: 'Done', outcomeId: 'o' }); await writeFile(file, JSON.stringify(d));
   await page.goto('/'); await go(page, 'Task・Outcome'); await expect(page.locator('.child-row')).toHaveCount(1); await expect(page.getByRole('button', { name: '完了したTask', exact: true })).toHaveCount(0);
-  await page.locator('.group-meta').first().click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
-  await page.locator('.group-row.clickable').first().focus(); await page.keyboard.press('Enter'); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
-  await page.getByLabel('Doneも表示').check(); await expect(page.locator('.child-row')).toHaveCount(2); await page.getByLabel('Doneも表示').uncheck(); await page.getByLabel('Taskのステータス', { exact: true }).selectOption('Done'); await expect(page.locator('.child-row')).toHaveCount(1); await expect(page.getByRole('button', { name: '完了したTask', exact: true })).toBeVisible();
+  await page.locator('.group-meta').first().click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome'); await cancelEdit(page);
+  await page.locator('.group-row.clickable').first().focus(); await page.keyboard.press('Enter'); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome'); await cancelEdit(page);
+  await page.getByLabel('Doneも表示').check(); await expect(page.locator('.child-row')).toHaveCount(2); await page.getByLabel('Doneも表示').uncheck(); await page.locator('.task-filter').filter({ hasText: 'ステータス：' }).locator('summary').click(); await page.getByLabel('Done', { exact: true }).check(); await page.locator('.task-filter').filter({ hasText: 'ステータス：' }).locator('summary').click(); await expect(page.locator('.child-row')).toHaveCount(1); await expect(page.getByRole('button', { name: '完了したTask', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.outcome-card').getByRole('button', { name: '完了したTask', exact: true })).toHaveCount(0); await expect(page.locator('.outcome-footer')).toContainText('Task 1 / 2 Done');
   await page.getByLabel('Doneも表示').check(); await expect(page.locator('.outcome-card').getByRole('button', { name: '完了したTask', exact: true })).toBeVisible();
-  await go(page, 'ガントチャート'); await page.locator('.outcome-label .gantt-task-name').click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await go(page, 'ガントチャート'); await page.locator('.outcome-label .gantt-task-name').click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome'); await cancelEdit(page);
   await page.locator('.outcome-track').click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('行全体Outcome');
 });
 test('month gantt fits all dates on desktop and exposes month end by scrolling on smaller screens', async ({ page }) => {
@@ -287,7 +289,7 @@ test('legacy task details, draft cancellation, invalid hidden fields, keyboard t
   await page.getByRole('tab', { name: '基本情報', exact: true }).focus(); await page.keyboard.press('ArrowRight'); await expect(page.getByRole('tab', { name: 'メモ', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('textbox', { name: 'メモ', exact: true }).fill('破棄するメモ'); await page.getByRole('tab', { name: /^資料リンク/ }).click(); await page.getByRole('button', { name: '＋ 資料を追加' }).click();
   await page.getByRole('tab', { name: 'メモ', exact: true }).click(); await page.getByRole('button', { name: '保存', exact: true }).click(); await expect(page.getByRole('tab', { name: /^資料リンク/ })).toHaveAttribute('aria-selected', 'true'); await expect(page.getByRole('alert')).toContainText('リンク先');
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); expect(JSON.parse(await readFile(file, 'utf8')).tasks[0]).toEqual(legacy);
+  await cancelEdit(page); expect(JSON.parse(await readFile(file, 'utf8')).tasks[0]).toEqual(legacy);
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: '旧Task', exact: true }).click();
   const tabs = page.locator('.detail-tabs'); const metrics = await tabs.evaluate(el => ({ scroll: el.scrollWidth, width: el.clientWidth })); expect(metrics.scroll).toBeLessThanOrEqual(metrics.width + 1);
   await page.getByRole('tab', { name: /^関連チャット/ }).click(); await page.getByRole('button', { name: '＋ チャットを追加' }).click(); await page.getByRole('textbox', { name: 'リンク先（URL／パス）', exact: true }).fill('https://example.com/chat'); await page.getByRole('textbox', { name: '概要', exact: true }).fill('確認'); await save(page);
@@ -296,7 +298,7 @@ test('legacy task details, draft cancellation, invalid hidden fields, keyboard t
 test('Task add rows on cards and Gantt preselect the parent without opening Outcome details', async ({ page }) => {
   const data = emptyData(); data.outcomes.push(newOutcome('追加先', 'o')); await writeFile(file, JSON.stringify(data));
   await page.goto('/'); await go(page, 'Task・Outcome'); await page.getByRole('tab', { name: 'Outcomeカード' }).click();
-  await page.getByRole('button', { name: '追加先にTaskを追加', exact: true }).click(); await expect(page.getByLabel('Task名', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Outcome', exact: true })).toContainText('追加先'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.getByRole('button', { name: '追加先にTaskを追加', exact: true }).click(); await expect(page.getByLabel('Task名', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: 'Outcome', exact: true })).toContainText('追加先'); await cancelEdit(page);
   await go(page, 'ガントチャート'); await page.getByRole('button', { name: '追加先にTaskを追加', exact: true }).click(); await page.getByLabel('Task名', { exact: true }).fill('ガントからTask'); await save(page);
   expect(JSON.parse(await readFile(file, 'utf8')).tasks[0].outcomeId).toBe('o');
 });
@@ -394,7 +396,7 @@ test('Outcome folding shares state, keeps parent details and adds Tasks at the e
   await page.getByRole('button', { name: '開閉Outcomeを折りたたむ', exact: true }).click();
   await expect(page.locator('.child-row')).toHaveCount(1); await expect(page.getByRole('button', { name: '開閉OutcomeにTaskを追加', exact: true })).toHaveCount(0);
   await expect(page.locator('.group-period').first()).toContainText(dateLabel(day));
-  await page.getByRole('button', { name: '開閉Outcome', exact: true }).click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('開閉Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.getByRole('button', { name: '開閉Outcome', exact: true }).click(); await expect(page.getByLabel('Outcome名', { exact: true })).toHaveValue('開閉Outcome'); await cancelEdit(page);
   await page.getByRole('tab', { name: 'Outcomeカード' }).click(); await expect(page.locator('.outcome-card').first().locator('.task-row')).toHaveCount(0);
   await go(page, 'ガントチャート'); await expect(page.locator('.gantt-label.child')).toHaveCount(1); await expect(page.locator('.task-track')).toHaveCount(1);
   await page.getByRole('button', { name: '開閉Outcomeを展開する', exact: true }).focus(); await page.keyboard.press('Enter');
@@ -446,7 +448,7 @@ test('timestamps and concise history persist without table columns or unchanged-
   await save(page); data = JSON.parse(await readFile(file, 'utf8')); expect(data.tasks[0].history).toHaveLength(2); expect(data.tasks[0].createdAt).toBe(task.createdAt);
   await page.reload(); await go(page, 'Task・Outcome'); await expect(page.locator('thead')).not.toContainText('作成日'); await expect(page.locator('thead')).not.toContainText('更新日');
   await page.getByRole('button', { name: '履歴Task', exact: true }).click(); await page.getByRole('tab', { name: '基本情報', exact: true }).focus(); await page.keyboard.press('End'); await expect(page.getByRole('tab', { name: '履歴', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('.history-entry')).toHaveCount(2); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await expect(page.locator('.history-entry')).toHaveCount(2); await cancelEdit(page);
   await page.getByRole('button', { name: '＋ Outcome', exact: true }).click(); await page.getByLabel('Outcome名', { exact: true }).fill('履歴Outcome'); await save(page);
   await page.getByRole('button', { name: '履歴Outcome', exact: true }).click(); await expect(page.locator('dialog.drawer').getByRole('tab')).toHaveText(['基本情報', '履歴']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry')).toContainText('Outcomeを作成');
   await page.getByRole('tab', { name: '基本情報', exact: true }).click(); await page.getByLabel('Outcome名', { exact: true }).fill('更新Outcome'); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await save(page);
@@ -459,7 +461,7 @@ test('local controls remain usable and legacy audit data is unknown and safely d
   await expect(page.locator('.sidebar-bottom')).toContainText('LOCAL · JSON'); await page.getByLabel('時刻の選択間隔').selectOption('30'); await expect(page.getByRole('status')).toContainText('設定を保存');
   await go(page, 'Task・Outcome'); await page.getByRole('button', { name: '旧日時Task', exact: true }).click(); await expect(page.locator('.audit-meta dd')).toHaveText(['不明', '不明']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-empty')).toContainText('履歴はまだありません'); await save(page);
   expect(JSON.parse(await readFile(file, 'utf8')).tasks[0].history).toBeUndefined();
-  await page.getByRole('button', { name: '旧日時Outcome', exact: true }).click(); await expect(page.locator('.audit-meta dd')).toHaveText(['不明', '不明']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-empty')).toBeVisible(); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+  await page.getByRole('button', { name: '旧日時Outcome', exact: true }).click(); await expect(page.locator('.audit-meta dd')).toHaveText(['不明', '不明']); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-empty')).toBeVisible(); await cancelEdit(page);
   const external = JSON.parse(await readFile(file, 'utf8')); external.tasks[0].history = [{ at: '2026-10-01T01:00:00Z', summary: '<img src=x onerror=window.evil=true>' }]; await writeFile(file, JSON.stringify(external));
   await page.setViewportSize({ width: 390, height: 844 }); await expect(page.locator('.mobile-local-controls').getByRole('button', { name: '再読み込み', exact: true })).toBeVisible(); await page.getByRole('button', { name: '再読み込み', exact: true }).click();
   await page.getByRole('button', { name: '旧日時Task', exact: true }).click(); await page.getByRole('tab', { name: '履歴', exact: true }).click(); await expect(page.locator('.history-entry')).toContainText('<img src=x'); await expect(page.locator('.history-list img')).toHaveCount(0); expect(await page.evaluate(() => (window as Window & { evil?: boolean }).evil)).toBeUndefined();
@@ -484,7 +486,7 @@ test('calendar clamps long names and exposes safe full text on hover and focus i
     await button.focus(); await expect(tooltip).toBeVisible();
     const bounds = (await tooltip.boundingBox())!; expect(bounds.x).toBeGreaterThanOrEqual(12); expect(bounds.x + bounds.width).toBeLessThanOrEqual(1428); expect(bounds.y + bounds.height).toBeLessThanOrEqual(988);
     await page.mouse.move(0, 0); await page.getByRole('button', { name: mode, exact: true }).focus(); await expect(tooltip).toHaveCount(0);
-    await button.click(); await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue(name); await expect(tooltip).toHaveCount(0); await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+    await button.click(); await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue(name); await expect(tooltip).toHaveCount(0); await cancelEdit(page);
   }
   expect(await page.evaluate(() => (window as Window & { evil?: boolean }).evil)).toBeUndefined();
 });
@@ -493,9 +495,10 @@ test('calendar keeps short and overlapping schedules aligned and tooltip inside 
   const day = localDate(), d = emptyData();
   d.tasks.push({ ...newTask('長い件名'.repeat(40), 'short'), next: day + 'T09:00', nextEnd: '09:15', due: day }, { ...newTask('次の予定', 'following'), next: day + 'T09:15', nextEnd: '09:45' }, { ...newTask('並行する予定', 'overlap'), next: day + 'T09:00', nextEnd: '09:30' });
   await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'カレンダー'); await page.getByRole('button', { name: '日', exact: true }).click();
+  await settleCalendar(page);
   const geometry = await page.locator('.schedule-event').evaluateAll(elements => elements.map(el => ({ top: parseFloat((el as HTMLElement).style.top), height: parseFloat((el as HTMLElement).style.height), left: el.getBoundingClientRect().left, width: el.getBoundingClientRect().width, overflow: getComputedStyle(el).overflow })));
-  expect(geometry[0].height).toBe(24); expect(geometry[2].top).toBe(geometry[0].top + 24); expect(geometry[1].left).toBeGreaterThan(geometry[0].left + geometry[0].width - 1); expect(geometry.every(x => x.overflow === 'hidden')).toBe(true);
-  await expect(page.locator('.short-event .schedule-event-open')).toHaveCSS('-webkit-line-clamp', '1');
+  expect(geometry[0].height).toBe((await hourPixels(page)) / 4); expect(geometry[2].top).toBe(geometry[0].top + (await hourPixels(page)) / 4); expect(geometry[1].left).toBeGreaterThan(geometry[0].left + geometry[0].width - 1); expect(geometry.every(x => x.overflow === 'hidden')).toBe(true);
+  await expect(page.locator('.short-event .schedule-event-open').first()).toHaveCSS('-webkit-line-clamp', '1');
   await page.locator('.schedule-event-open').first().hover(); await expect(page.getByRole('tooltip')).toBeVisible(); await page.locator('.schedule-scroll').evaluate(el => el.scrollTop += 5); await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: '月', exact: true }).click();
   const button = page.locator('.cal-event.due').first(); await button.focus(); await expect(page.getByRole('tooltip')).toBeVisible();
@@ -504,9 +507,11 @@ test('calendar keeps short and overlapping schedules aligned and tooltip inside 
   await button.click(); await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByRole('tooltip')).toHaveCount(0);
 });
 
+async function settleCalendar(page: Page) { await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))); }
 async function calendarTrack(page: Page, day: string) {
+  await settleCalendar(page);
   const track = page.locator(`.schedule-day-track[data-calendar-day="${day}"]`);
-  await track.evaluate(el => { const panel = el.closest('.schedule-scroll')!; panel.scrollTop = 720; panel.scrollLeft += el.getBoundingClientRect().left - panel.getBoundingClientRect().left - 100; });
+  await track.evaluate(el => { const panel = el.closest('.schedule-scroll')!; panel.scrollTop = parseFloat(getComputedStyle(panel).getPropertyValue('--hour-pixels')) * 7.5; panel.scrollLeft += el.getBoundingClientRect().left - panel.getBoundingClientRect().left - 100; });
   return track;
 }
 async function calendarDrag(page: Page, id: string, day: string, startHour: number, edge: 'start' | 'end' | 'move' = 'move', cancel = false) {
@@ -515,7 +520,7 @@ async function calendarDrag(page: Page, id: string, day: string, startHour: numb
   const offset = edge === 'end' ? box.height - 2 : edge === 'start' ? 2 : box.height / 2;
   const grab = edge === 'end' ? -2 : offset;
   await page.mouse.move(box.x + box.width / 2, box.y + offset); await page.mouse.down();
-  await page.mouse.move(bounds.x + Math.min(bounds.width / 2, 80), bounds.y + startHour * 96 + grab, { steps: 10 });
+  await page.mouse.move(bounds.x + Math.min(bounds.width / 2, 80), bounds.y + startHour * (await hourPixels(page)) + grab, { steps: 10 });
   await expect(page.locator('.calendar-drag-ghost')).toBeVisible(); await expect(page.locator('.add-preview')).toHaveCount(0);
   if (cancel) await page.keyboard.press('Escape');
   await page.mouse.up(); await expect(page.locator('.calendar-drag-ghost')).toHaveCount(0); await page.waitForTimeout(400);
@@ -528,33 +533,31 @@ async function calendarUndo(page: Page) {
 }
 async function calendarSaved(id: string) { return JSON.parse(await readFile(file, 'utf8')).tasks.find((task: { id: string }) => task.id === id); }
 
-test('calendar adds only by double clicking blank space and opens details from coloured padding', async ({ page }) => {
+test('calendar adds by clicking blank space and opens details from coloured padding', async ({ page }) => {
   const day = localDate(), d = emptyData(); d.tasks.push({ ...newTask('枠の余白', 'hit'), next: day + 'T10:00', nextEnd: '11:00' });
   await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'カレンダー');
   for (const mode of ['日', '週']) {
     await page.getByRole('button', { name: mode, exact: true }).click(); const track = await calendarTrack(page, day), r = (await track.boundingBox())!;
     await expect(track).toHaveCSS('cursor', 'default');
     await expect(page.locator('.calendar-actions')).not.toContainText('空白をダブルクリックで追加');
-    await page.mouse.move(r.x + 50, r.y + 13.25 * 96);
-    await expect(page.locator('.add-preview')).toHaveText('＋ 13:15に追加（ダブルクリック）');
-    expect(await page.locator('.add-preview').evaluate(el => parseFloat((el as HTMLElement).style.top))).toBe(13.25 * 96);
+    await page.mouse.move(r.x + 50, r.y + 13.25 * (await hourPixels(page)) + 1);
+    await expect(page.locator('.add-preview')).toHaveText('＋ 13:15に追加（クリック）');
+    expect(await page.locator('.add-preview').evaluate(el => parseFloat((el as HTMLElement).style.top))).toBe(13.25 * (await hourPixels(page)));
     await page.mouse.move(0, 0); await expect(page.locator('.add-preview')).toHaveCount(0);
-    await page.mouse.click(r.x + 50, r.y + 13.25 * 96); await expect(page.locator('dialog.drawer')).toHaveCount(0);
-    await page.mouse.dblclick(r.x + 50, r.y + 13.25 * 96); await expect(page.locator('dialog.drawer')).toBeVisible();
+    await page.mouse.click(r.x + 50, r.y + 13.25 * (await hourPixels(page)) + 1); await expect(page.locator('dialog.drawer')).toBeVisible();
     await expect(page.getByRole('button', { name: '開始時刻', exact: true })).toHaveText('13:15'); await expect(page.getByRole('button', { name: '終了時刻', exact: true })).toHaveText('13:45');
-    await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+    await cancelEdit(page);
     const box = (await page.locator('.schedule-event').boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height - 2); await expect(page.locator('.add-preview')).toHaveCount(0);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height - 2); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue('枠の余白');
-    await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+    await cancelEdit(page);
   }
   await page.getByLabel('追加・移動の時刻の刻み').selectOption('30'); await expect(page.getByLabel('時刻の選択間隔')).toHaveValue('30');
-  const track = await calendarTrack(page, day), r = (await track.boundingBox())!; await page.mouse.move(r.x + 50, r.y + 13.2 * 96); await expect(page.locator('.add-preview')).toHaveText('＋ 13:00に追加（ダブルクリック）'); await page.mouse.dblclick(r.x + 50, r.y + 13.2 * 96);
+  const track = await calendarTrack(page, day), r = (await track.boundingBox())!; await page.mouse.move(r.x + 50, r.y + 13.2 * (await hourPixels(page))); await expect(page.locator('.add-preview')).toHaveText('＋ 13:00に追加（クリック）'); await page.mouse.click(r.x + 50, r.y + 13.2 * (await hourPixels(page)));
   await expect(page.getByRole('button', { name: '開始時刻', exact: true })).toHaveText('13:00'); await page.getByLabel('Task名', { exact: true }).fill('空白から追加'); await save(page);
   expect((await calendarSaved(JSON.parse(await readFile(file, 'utf8')).tasks.find((t: { name: string }) => t.name === '空白から追加').id)).next).toBe(day + 'T13:00');
   await page.getByRole('button', { name: '月', exact: true }).click(); const blank = page.locator(`.cal-day[data-calendar-day="${addDays(day, 1)}"]`);
-  await blank.click({ position: { x: 10, y: 10 } }); await expect(page.locator('dialog.drawer')).toHaveCount(0);
-  await blank.dblclick({ position: { x: 10, y: 10 } }); await page.getByLabel('Task名', { exact: true }).fill('日付だけ');
+  await blank.click({ position: { x: 10, y: 10 } }); await page.getByLabel('Task名', { exact: true }).fill('日付だけ');
   await expect(page.getByRole('button', { name: '次の対応予定（日付）', exact: true })).toContainText(dateLabel(addDays(day, 1)));
   await page.getByRole('button', { name: '作成', exact: true }).click(); await expect(page.locator('.form-error')).toContainText('すべて指定');
   await page.getByRole('button', { name: '開始時刻', exact: true }).click(); await page.getByRole('button', { name: '14:00', exact: true }).click();
@@ -620,25 +623,25 @@ test('calendar addition hint stays before the following task and matches the new
     for (const step of ['30', '15']) {
       await page.getByLabel('追加・移動の時刻の刻み').selectOption(step); await expect(page.getByLabel('追加・移動の時刻の刻み')).toBeEnabled();
       const track = await calendarTrack(page, day), r = (await track.boundingBox())!;
-      await page.mouse.move(r.x + 50, r.y + (12 - 1 / 60) * 96);
+      await page.mouse.move(r.x + 50, r.y + 12 * (await hourPixels(page)) - 2);
       const hint = page.locator('.add-preview'), expected = step === '30' ? '11:30' : '11:45';
-      await expect(hint).toHaveText(`＋ ${expected}に追加（ダブルクリック）`);
+      await expect(hint).toHaveText(`＋ ${expected}に追加（クリック）`);
       const hintBox = (await hint.boundingBox())!, taskBox = (await page.locator('.schedule-event[data-calendar-task="noon"]').boundingBox())!;
       expect(hintBox.y + hintBox.height).toBeLessThanOrEqual(taskBox.y + 0.5);
-      await page.mouse.dblclick(r.x + 50, r.y + (12 - 1 / 60) * 96);
+      await page.mouse.click(r.x + 50, r.y + 12 * (await hourPixels(page)) - 2);
       await expect(page.getByRole('button', { name: '開始時刻', exact: true })).toHaveText(expected);
-      await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+      await cancelEdit(page);
     }
     await page.getByLabel('追加・移動の時刻の刻み').selectOption('30'); await expect(page.getByLabel('追加・移動の時刻の刻み')).toBeEnabled();
     const track = await calendarTrack(page, day), r = (await track.boundingBox())!;
-    await page.mouse.dblclick(r.x + 50, r.y + (12 - 1 / 60) * 96);
+    await page.mouse.click(r.x + 50, r.y + 12 * (await hourPixels(page)) - 2);
     await expect(page.getByRole('button', { name: '開始時刻', exact: true })).toHaveText('11:30');
     await expect(page.getByRole('button', { name: '終了時刻', exact: true })).toHaveText('12:00');
-    await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+    await cancelEdit(page);
     const existing = (await page.locator('.schedule-event').boundingBox())!;
     await page.mouse.move(existing.x + existing.width / 2, existing.y + 20); await expect(page.locator('.add-preview')).toHaveCount(0);
     await page.mouse.click(existing.x + existing.width / 2, existing.y + 20); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue('12時の既存予定');
-    await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
+    await cancelEdit(page);
   }
   expect(JSON.parse(await readFile(file, 'utf8')).tasks).toEqual(d.tasks);
 });
@@ -649,7 +652,7 @@ test('calendar defaults to week at eight and keeps scroll position through saves
   await expect(page.getByRole('button', { name: '週', exact: true })).toHaveClass(/active/); await expect(page.locator('.schedule-day-track')).toHaveCount(7);
   async function atEight() {
     const scroll = page.locator('.schedule-scroll');
-    await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBe(756);
+    await expect.poll(() => scroll.evaluate(el => Math.abs(el.scrollTop - (8 * parseFloat(getComputedStyle(el).getPropertyValue('--hour-pixels')) - 12)))).toBeLessThan(1);
     const hour = (await page.locator('.schedule-hour').filter({ hasText: /^8:00$/ }).boundingBox())!, header = (await page.locator('.schedule-corner').boundingBox())!;
     expect(hour.y).toBeGreaterThanOrEqual(header.y + header.height); expect(hour.y).toBeLessThan(header.y + header.height + 20);
   }
@@ -657,13 +660,96 @@ test('calendar defaults to week at eight and keeps scroll position through saves
   expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(0); await expect(page.locator('.schedule-hour').filter({ hasText: /^0:00$/ })).toHaveCount(1);
   await page.getByRole('button', { name: '日', exact: true }).click(); await atEight();
   await calendarTrack(page, day); await calendarDrag(page, 'eight', day, 11.5, 'end');
-  expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(720);
+  expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(7.5 * (await hourPixels(page)));
   await page.locator('.schedule-event-open').click(); await page.getByLabel('Task名', { exact: true }).fill('編集後も位置を維持'); await save(page);
-  expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(720);
-  await calendarUndo(page); expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(720);
+  expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(7.5 * (await hourPixels(page)));
+  await calendarUndo(page); expect(await page.locator('.schedule-scroll').evaluate(el => el.scrollTop)).toBe(7.5 * (await hourPixels(page)));
   await page.getByRole('button', { name: '週', exact: true }).click(); await atEight();
   await page.locator('.schedule-scroll').evaluate(el => el.scrollTop = 1000); await page.getByRole('button', { name: '月', exact: true }).click();
   await expect(page.locator('.cal-day')).toHaveCount(42); await page.getByRole('button', { name: '日', exact: true }).click(); await atEight();
   await page.getByRole('button', { name: '月', exact: true }).click(); await page.getByRole('button', { name: '週', exact: true }).click(); await atEight();
   await go(page, 'Task・Outcome'); await go(page, 'カレンダー'); await expect(page.getByRole('button', { name: '週', exact: true })).toHaveClass(/active/); await atEight();
+});
+
+test('task filters combine multiple OR and NOT selections and preserve both hierarchy layouts', async ({ page }) => {
+  const d = emptyData(); d.outcomes = [newOutcome('成果A', 'a'), newOutcome('成果B', 'b')];
+  d.tasks = [
+    { ...newTask('作業A', '1'), status: 'Doing', category: '開発', outcomeId: 'a' },
+    { ...newTask('作業B', '2'), status: 'Waiting', category: '開発', outcomeId: 'b' },
+    { ...newTask('作業C', '3'), status: 'Inbox', category: '定例', outcomeId: 'a' },
+    { ...newTask('完了D', '4'), status: 'Done', category: '定例' },
+    newTask('未分類E', '5'),
+  ]; await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'Task・Outcome');
+  await expect(page.locator('.child-row')).toHaveCount(4);
+  const statusFilter = page.locator('.task-filter').filter({ hasText: 'ステータス：' }), categoryFilter = page.locator('.task-filter').filter({ hasText: 'カテゴリ：' });
+  await statusFilter.locator('summary').click(); await statusFilter.getByLabel('Doing', { exact: true }).check(); await statusFilter.getByLabel('Waiting', { exact: true }).check(); await expect(page.locator('.child-row')).toHaveCount(2);
+  await statusFilter.getByLabel('ステータスの検索条件').selectOption('exclude'); await expect(page.locator('.child-row')).toHaveCount(2); await expect(page.locator('.child-row .row-title')).toHaveText(['作業C', '未分類E']);
+  await statusFilter.getByRole('button', { name: '選択を解除' }).click(); await statusFilter.locator('summary').click();
+  await categoryFilter.locator('summary').click(); await categoryFilter.getByLabel('開発', { exact: true }).check(); await categoryFilter.getByLabel('定例', { exact: true }).check(); await expect(page.locator('.child-row')).toHaveCount(3);
+  await categoryFilter.getByLabel('カテゴリの検索条件').selectOption('exclude'); await expect(page.locator('.child-row')).toHaveCount(1); await expect(page.locator('.child-row')).toContainText('未分類E');
+  await categoryFilter.getByRole('button', { name: '選択を解除' }).click(); await categoryFilter.locator('summary').click();
+  await page.getByRole('button', { name: 'カテゴリ基準', exact: true }).click(); await expect(page.locator('.category-group-row')).toHaveCount(3); await expect(page.locator('.child-row').filter({ hasText: '作業B' })).toContainText('成果B');
+  await page.getByRole('button', { name: '開発を折りたたむ', exact: true }).click(); await expect(page.locator('.child-row')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Outcome基準', exact: true }).click(); await expect(page.locator('.child-row')).toHaveCount(4);
+  await page.getByRole('button', { name: 'カテゴリ基準', exact: true }).click(); await page.getByRole('button', { name: '開発を展開する', exact: true }).click();
+  await page.getByRole('button', { name: '開発にTaskを追加', exact: true }).click(); await expect(page.getByRole('button', { name: 'カテゴリ', exact: true })).toContainText('開発'); await expect(page.getByRole('button', { name: 'Outcome', exact: true })).toContainText('Outcomeを選択'); await cancelEdit(page);
+  await page.getByLabel('Task名を検索').fill('存在しない'); await expect(page.locator('.child-row')).toHaveCount(0);
+});
+
+test('quick Tasks can be created in both forms, persist and keep existing details when switched', async ({ page }) => {
+  const d = emptyData(); d.tasks = [{ ...newTask('詳細ありTask', 'detail'), memo: '保持するメモ', category: '業務', status: 'Doing' }]; await writeFile(file, JSON.stringify(d));
+  await page.goto('/'); await go(page, 'Task・Outcome');
+  const width = await page.locator('.quick-add').evaluate(el => ({ quick: el.getBoundingClientRect().width, content: el.parentElement!.getBoundingClientRect().width })); expect(width.quick).toBeLessThan(width.content * .6);
+  await page.locator('.quick-add').getByLabel('数分タスク', { exact: true }).check(); await page.getByLabel('Taskをすばやく追加').fill('メール確認'); await page.getByRole('button', { name: '追加', exact: true }).click(); await expect(page.locator('.child-row').filter({ hasText: 'メール確認' })).toContainText('数分タスク');
+  await page.getByRole('button', { name: '＋ Task', exact: true }).click(); await page.getByLabel('Task名', { exact: true }).fill('数分で返信\n補足'); expect((await page.getByLabel('Task名', { exact: true }).boundingBox())!.height).toBe(42);
+  await page.locator('.drawer').getByLabel('数分タスク', { exact: true }).check(); await expect(page.getByLabel('ステータス', { exact: true })).toHaveCount(0); await expect(page.getByRole('tab', { name: 'メモ', exact: true })).toHaveCount(0); await save(page);
+  await page.reload(); await go(page, 'Task・Outcome'); await page.getByRole('button', { name: 'メール確認', exact: true }).click(); await expect(page.locator('.drawer').getByLabel('数分タスク', { exact: true })).toBeChecked(); await cancelEdit(page);
+  const stored = JSON.parse(await readFile(file, 'utf8')).tasks; expect(stored.filter((t: {quick?: boolean}) => t.quick)).toHaveLength(2); expect(stored.find((t: {name: string}) => t.name.startsWith('数分で返信'))).toMatchObject({ status: 'Inbox', outcomeId: '', category: '', next: '' });
+  await page.getByRole('button', { name: '詳細ありTask', exact: true }).click(); await page.locator('.drawer').getByLabel('数分タスク', { exact: true }).check(); await save(page);
+  expect(JSON.parse(await readFile(file, 'utf8')).tasks[0]).toMatchObject({ quick: true, memo: '保持するメモ', category: '業務', status: 'Doing' });
+  await page.getByRole('button', { name: '詳細ありTask', exact: true }).click(); await page.locator('.drawer').getByLabel('数分タスク', { exact: true }).uncheck(); await expect(page.getByLabel('ステータス', { exact: true })).toHaveValue('Doing'); await save(page);
+  await page.setViewportSize({ width: 390, height: 844 }); expect(await page.locator('.quick-add').evaluate(el => el.getBoundingClientRect().right <= innerWidth)).toBe(true);
+});
+
+test('unsaved Task and Outcome edits offer continue, discard and save; failures retain edits', async ({ page }) => {
+  const d = emptyData(); d.tasks = [newTask('編集Task', 'edit')]; d.outcomes = [newOutcome('編集Outcome', 'outcome')]; await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'Task・Outcome');
+  await page.getByRole('button', { name: '編集Task', exact: true }).click(); await page.getByRole('button', { name: '閉じる', exact: true }).click(); await expect(page.locator('.drawer')).toHaveCount(0);
+  await page.getByRole('button', { name: '編集Task', exact: true }).click(); await page.getByLabel('Task名', { exact: true }).fill('更新Task'); await page.mouse.click(50, 300); const confirm = page.getByRole('dialog', { name: '変更を保存しますか？', exact: true }); await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: '編集を続ける' }).click(); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue('更新Task');
+  await page.keyboard.press('Escape'); await expect(confirm).toBeVisible(); await confirm.getByRole('button', { name: '保存して閉じる' }).click(); await expect(page.locator('.drawer')).toHaveCount(0); expect(JSON.parse(await readFile(file, 'utf8')).tasks[0].name).toBe('更新Task');
+  await page.getByRole('button', { name: '更新Task', exact: true }).click(); await page.getByLabel('Task名', { exact: true }).fill('保存失敗の編集'); await page.route('**/api/tasks/edit', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: '保存拒否' }) }));
+  await page.getByRole('button', { name: '閉じる', exact: true }).click(); await confirm.getByRole('button', { name: '保存して閉じる' }).click(); await expect(page.locator('.drawer .form-error')).toContainText('保存拒否'); await expect(page.getByLabel('Task名', { exact: true })).toHaveValue('保存失敗の編集'); await cancelEdit(page);
+  await page.getByRole('button', { name: '編集Outcome', exact: true }).click(); await page.getByLabel('Outcome名', { exact: true }).fill('破棄Outcome'); await page.getByRole('button', { name: 'キャンセル', exact: true }).click(); await confirm.getByRole('button', { name: '変更を破棄' }).click(); expect(JSON.parse(await readFile(file, 'utf8')).outcomes[0].name).toBe('編集Outcome');
+});
+
+test('calendar fits eight through twenty-two at desktop heights and retains overlap and full text', async ({ page }) => {
+  const day = localDate(), d = emptyData(); d.tasks = [
+    { ...newTask('朝の短い予定', 'morning'), next: day + 'T08:00', nextEnd: '08:15' },
+    { ...newTask('重複予定', 'overlap'), next: day + 'T08:00', nextEnd: '09:00' },
+    { ...newTask('夜の予定の全文を確認する'.repeat(12), 'night'), next: day + 'T20:30', nextEnd: '22:00' },
+  ]; await writeFile(file, JSON.stringify(d)); await page.goto('/'); await go(page, 'カレンダー');
+  for (const height of [900, 1000]) { await page.setViewportSize({ width: 1440, height }); for (const mode of ['日', '週']) {
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await expect.poll(async () => { const a = (await page.locator('.schedule-hour').filter({ hasText: /^8:00$/ }).boundingBox())!, z = (await page.locator('.schedule-hour').filter({ hasText: /^22:00$/ }).boundingBox())!, head = (await page.locator('.schedule-corner').boundingBox())!; return a.y >= head.y + head.height && z.y + z.height <= height; }).toBe(true);
+    await expect(page.locator('.time-legend')).toHaveCount(0); expect(await hourPixels(page)).toBeLessThan(96);
+    const positions = await page.locator('.schedule-event').evaluateAll(els => els.slice(0, 2).map(el => el.getBoundingClientRect().left)); expect(positions[0]).not.toBe(positions[1]);
+  }}
+  await page.getByRole('button', { name: '日', exact: true }).click(); await page.locator('[data-calendar-task="night"] .schedule-event-open').hover(); await expect(page.getByRole('tooltip')).toContainText(d.tasks[2].name);
+  await page.screenshot({ path: 'test-results/oct15-calendar.png' });
+  await page.setViewportSize({ width: 390, height: 844 }); await page.locator('.schedule-scroll').evaluate(el => el.scrollTop = 0); await expect(page.locator('.schedule-hour').filter({ hasText: /^0:00$/ })).toHaveCount(1);
+});
+
+
+test('calendar click uses the visible fractional hover slot and recalculates it after scrolling', async ({ page }) => {
+  await page.goto('/'); await go(page, 'カレンダー'); await page.getByRole('button', { name: '日', exact: true }).click();
+  const track = await calendarTrack(page, localDate()), r = (await track.boundingBox())!, pixels = await hourPixels(page), x = r.x + 80, y = r.y + 13.25 * pixels + .2;
+  await page.mouse.move(x, y); await expect(page.locator('.add-preview')).toBeVisible();
+  const expected = (await page.locator('.add-preview').innerText()).match(/(\d{2}:\d{2})/)![1];
+  await track.evaluate((el, point) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: Math.floor(point.x), clientY: Math.floor(point.y) })), {x, y});
+  await expect(page.getByRole('button', { name: '開始時刻', exact: true })).toHaveText(expected); await cancelEdit(page);
+  const fresh = await calendarTrack(page, localDate()), rect = (await fresh.boundingBox())!, py = rect.y + 13.4 * pixels;
+  await page.mouse.move(x, py); await expect(page.locator('.add-preview')).toBeVisible();
+  await page.locator('.schedule-scroll').evaluate((el, amount) => el.scrollTop += amount, pixels);
+  await fresh.evaluate((el, point) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: point.x, clientY: point.y })), {x, y: py});
+  await expect(page.getByRole('button', { name: '開始時刻', exact: true })).toHaveText('14:15');
 });

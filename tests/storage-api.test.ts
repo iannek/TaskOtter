@@ -218,3 +218,20 @@ describe('automatic timestamps and concise update history', () => {
     expect((await call('POST', '/api/tasks', { ...newTask('Task'), updatedAt: 'not-a-date' })).statusCode).toBe(400);
   });
 });
+
+describe('quick Tasks', () => {
+  it('persists the optional flag, keeps existing details, and records changes without changing legacy files', async () => {
+    const legacy = { ...newTask('既存Task', 'legacy'), memo: '保持するメモ', category: '業務' };
+    await writeFile(store.file, JSON.stringify({ ...emptyData(), tasks: [legacy] }));
+    expect((await call('GET', '/api/data')).json().tasks[0]).not.toHaveProperty('quick');
+    let response = await call('PUT', '/api/tasks/legacy', { ...legacy, quick: true });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().tasks[0]).toMatchObject({ ...legacy, quick: true });
+    expect(response.json().tasks[0].history.at(-1).summary).toContain('数分タスク');
+    expect((await new Store(directory).read()).tasks[0].quick).toBe(true);
+    response = await call('PUT', '/api/tasks/legacy', { ...response.json().tasks[0], quick: false });
+    expect(response.json().tasks[0]).toMatchObject({ ...legacy, quick: false });
+    expect((await call('POST', '/api/tasks', { ...newTask('メール確認'), quick: true })).statusCode).toBe(200);
+    expect((await call('POST', '/api/tasks', { ...newTask('不正'), quick: 'true' })).statusCode).toBe(400);
+  });
+});

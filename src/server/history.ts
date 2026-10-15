@@ -2,7 +2,7 @@ import { dateLabel, type Data, type Task, type Outcome } from '../shared/model.j
 
 type Item = Task | Outcome;
 type Entry = Record<string, unknown>;
-const fields = { name: '名前', memo: 'メモ', category: 'カテゴリ', status: 'ステータス', due: '締切日', start: '期間開始日', end: '期間終了日', next: '次の対応予定', nextEnd: '終了時刻', outcomeId: 'Outcome', nextAction: '次の予定で行うこと', complete: '完了', priority: '旧優先度' };
+const fields = { quick: '数分タスク', name: '名前', memo: 'メモ', category: 'カテゴリ', status: 'ステータス', due: '締切日', start: '期間開始日', end: '期間終了日', next: '次の対応予定', nextEnd: '終了時刻', outcomeId: 'Outcome', nextAction: '次の予定で行うこと', complete: '完了', priority: '旧優先度' };
 const arrays = { materials: '資料', chats: '関連チャット', subtasks: 'サブタスク' };
 const record = (item: unknown) => item as Entry;
 function canonical(value: unknown): string {
@@ -13,6 +13,7 @@ function canonical(value: unknown): string {
 function labelValue(key: string, value: unknown, data: Data): string {
   if (key === 'outcomeId') return value ? data.outcomes.find(o => o.id === value)?.name.slice(0, 60) || '削除されたOutcome' : 'Outcomeなし';
   if (value === undefined || value === '') return '未設定';
+  if (key === 'quick') return value ? 'はい' : 'いいえ';
   if (key === 'complete') return value ? '完了' : '未完了';
   if (value === 'before') return '以前';
   if (value === 'after') return '以降';
@@ -46,7 +47,7 @@ function arraySummary(key: string, label: string, oldValue: unknown, newValue: u
 function summary(before: Item, after: Item, oldData: Data, data: Data): string {
   const old = record(before), next = record(after), changes: string[] = [];
   for (const [key, label] of Object.entries(fields)) {
-    if (canonical(old[key] ?? '') === canonical(next[key] ?? '')) continue;
+    if (canonical(old[key] ?? (key === 'quick' ? false : '')) === canonical(next[key] ?? (key === 'quick' ? false : ''))) continue;
     if (['name', 'memo', 'nextAction'].includes(key)) changes.push(`${label}を変更`);
     else changes.push(`${label}：${labelValue(key, old[key], oldData)} → ${labelValue(key, next[key], data)}`);
   }

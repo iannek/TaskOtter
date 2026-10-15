@@ -44,6 +44,7 @@ export const schema = {
         id: { type: 'string', minLength: 1, maxLength: 200 }, name: { type: 'string', minLength: 1, pattern: '\\S' },
         memo: { type: 'string' }, category: { type: 'string' },
         nextAction: { type: 'string' },
+        quick: { type: 'boolean' },
         subtasks: { type: 'array', items: { $ref: '#/definitions/subtask' } },
         materials: { type: 'array', items: { $ref: '#/definitions/reference' } },
         chats: { type: 'array', items: { $ref: '#/definitions/reference' } },

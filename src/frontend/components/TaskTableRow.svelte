@@ -4,7 +4,7 @@
   import DatePicker from './DatePicker.svelte';
   import TimePicker from './TimePicker.svelte';
   import { statuses, dateLabel, rangeText, overflow, type Task, type Outcome } from '../../shared/model.js';
-  let { task, outcomes, timeStep, disabled, open, save }: { task: Task; outcomes: Outcome[]; timeStep: number; disabled: boolean; open: (task: Task) => void; save: (task: Task) => Promise<void> } = $props();
+  let { task, outcomes, timeStep, disabled, open, save, showOutcome = false }: { showOutcome?: boolean; task: Task; outcomes: Outcome[]; timeStep: number; disabled: boolean; open: (task: Task) => void; save: (task: Task) => Promise<void> } = $props();
   let editing = $state<'range' | 'due' | 'next' | null>(null), message = $state('');
   let start = $state(''), end = $state(''), due = $state(''), day = $state(''), from = $state(''), to = $state('');
   let rangeCandidate = $derived({ ...task, start: start || (end ? 'before' : ''), end: end || (start ? 'after' : '') });
@@ -40,7 +40,7 @@
 </script>
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (表の行をEnterでも開けるようにする) -->
 <tr class="child-row" tabindex="0" aria-label={`${task.name}の詳細`} onclick={rowClick} onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(task); } }}>
-  <td class="task-name-column"><div class="task-cell"><TaskCheck {task} {disabled} {save} /><div class="task-cell-name"><button class="row-title two-line-title" title={task.name} onclick={() => open(task)}>{task.name}</button><TaskCounts {task} /></div></div>{#if overflow(task, outcomes)}<span class="warning">⚠ Outcomeの期間外</span>{/if}</td>
+  <td class="task-name-column"><div class="task-cell"><TaskCheck {task} {disabled} {save} /><div class="task-cell-name"><button class="row-title two-line-title" title={task.name} onclick={() => open(task)}>{task.name}</button>{#if task.quick}<span class="quick-task-badge">数分タスク</span>{/if}{#if showOutcome}<div class="selection-info">{outcomes.find(o => o.id === task.outcomeId)?.name || 'Outcomeなし'}</div>{/if}<TaskCounts {task} /></div></div>{#if overflow(task, outcomes)}<span class="warning">⚠ Outcomeの期間外</span>{/if}</td>
   <td><select class={`inline-status badge ${task.status}`} aria-label={`${task.name}のステータス`} {disabled} onchange={changeStatus}>{#each statuses as status}<option selected={task.status === status}>{status}</option>{/each}</select></td>
   <td>{task.category || '—'}</td>
   <td><button class="inline-field" aria-label={`${task.name}の対応予定期間を編集`} aria-expanded={editing === 'range'} {disabled} onclick={() => edit('range')}>{rangeText(task)}</button></td>

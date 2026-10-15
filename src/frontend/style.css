@@ -135,3 +135,62 @@ button.outcome-label{width:100%;text-align:left;border-top:1px solid #bed1ed;col
 .calendar-due-static,.calendar-due-static button{cursor:pointer}
 
 .calendar-drop-preview.add-preview{height:24px;background:#edf4ff;opacity:.8;white-space:nowrap}
+
+/* 2026/10/15: requested task entry, filters and hierarchy controls. */
+.quick-add{width:50%;min-width:560px;max-width:100%;align-items:center}
+.quick-add input[type=checkbox]{flex:none;width:16px;min-width:16px;accent-color:var(--blue)}
+.quick-task-check{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;color:#64738a}
+.quick-task-option{margin-bottom:20px;padding:12px;background:#fff8e9;border-radius:8px}
+.quick-task-option label{display:flex;gap:8px;align-items:center}
+.quick-task-badge{display:inline-block;border-radius:5px;padding:2px 6px;font-size:12px;color:#a16e21;background:var(--amber-soft)}
+.editor-name-input.task-name-input{min-height:0;height:42px;line-height:24px;resize:vertical}
+.hierarchy-tabs{display:flex;gap:8px;margin:16px 0}
+.task-list-table .category-group-row td{background:var(--teal-soft)}
+.task-filter{position:relative;max-width:100%;font-size:14px}
+.task-filter summary{border:1px solid #dfe4ea;border-radius:8px;background:white;padding:8px 11px;cursor:pointer;overflow-wrap:anywhere}
+.task-filter-options{position:absolute;top:100%;left:0;z-index:20;background:white;border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);padding:12px;min-width:220px;max-width:calc(100vw - 40px);max-height:330px;overflow:auto}
+.task-filter-options label{display:flex;align-items:center;gap:8px;padding:8px 2px;overflow-wrap:anywhere}
+.task-filter-options select{width:100%;margin-bottom:8px}
+.unsaved-confirm{border:1px solid var(--line);border-radius:12px;padding:26px;max-width:calc(100vw - 32px);color:var(--ink);box-shadow:var(--shadow)}
+.unsaved-confirm::backdrop{background:#18233366}.unsaved-confirm h2{font-size:20px;margin:0 0 14px}.unsaved-confirm p{color:var(--muted)}
+.unsaved-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px;flex-wrap:wrap}
+@media(max-width:900px){.quick-add{width:100%;min-width:0;flex-wrap:wrap}.quick-add input[name=name]{flex-basis:60%}}
+
+/* Calendar: fit 8:00–22:00, keeping the whole 0–24 range scrollable. */
+.schedule-scroll{max-height:none;min-height:260px}
+.schedule-grid{grid-template-rows:auto calc(24 * var(--hour-pixels))}
+.schedule-hour-gutter,.schedule-day-track{height:calc(24 * var(--hour-pixels))}
+.schedule-day-track{background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hour-pixels) - 1px),#e5eaf0 calc(var(--hour-pixels) - 1px),#e5eaf0 var(--hour-pixels))}
+.schedule-event .schedule-event-open{font-size:12px;line-height:14px;max-height:28px}
+.schedule-event.short-event .schedule-event-open{max-height:14px}
+.schedule-event.tiny-event{padding:0 2px;gap:2px}
+.schedule-event.tiny-event .schedule-event-open{font-size:10px;line-height:11px;max-height:11px}
+.schedule-event.tiny-event .task-done-check{width:9px;height:9px;margin-top:1px}
+.calendar-drop-preview.add-preview{padding:0 3px;line-height:1;font-size:10px;display:flex;align-items:center;overflow:hidden}
+
+/* Off-range Tasks: a stable right column, with independent scrolling. */
+.calendar-with-outside{display:grid;grid-template-columns:minmax(0,1fr) clamp(280px,25vw,340px);gap:16px;align-items:start}
+.calendar-existing-pane{min-width:0}.calendar-with-outside .schedule-grid{grid-template-columns:68px var(--calendar-columns)}
+.calendar-with-outside .calendar-month{height:var(--calendar-panel-height);overflow:auto}
+.outside-tray{height:var(--calendar-panel-height);min-width:0;min-height:260px;display:flex;flex-direction:column;overflow:hidden}
+.outside-tray-header{padding:16px;border-bottom:1px solid var(--line)}
+.outside-tray-header h2{font-size:16px;margin:0;display:flex;align-items:center;gap:8px;line-height:1.5;flex-wrap:wrap}
+.outside-tray-header h2>span{background:#edf1f6;color:#6c7f98;padding:2px 7px;border-radius:10px;font-size:12px}
+.outside-tray-header p{margin:7px 0 0;font-size:12px;color:var(--muted);line-height:1.6;overflow-wrap:anywhere}
+.outside-field-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.outside-tray-hint{font-size:12px;color:var(--muted);padding:12px 16px;line-height:1.7}
+.outside-date-groups{padding:0 12px 12px;overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
+.outside-date-group{border:1px solid #e4e9f0;border-radius:8px;overflow:hidden;min-width:0;background:white;margin-bottom:12px}
+.outside-date-heading{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;border:0;background:#f3f6fa;color:#596d8a;padding:10px;font-size:13px;text-align:left;line-height:1.6}
+.outside-date-heading>span:last-child{color:#8190a6;flex:none}
+.outside-task{display:flex;gap:8px;padding:12px 10px;border-top:1px solid #edf0f3;cursor:grab;touch-action:none;user-select:none;min-width:0}
+.outside-task:hover{background:#f4f8ff}.outside-task *{touch-action:none}.outside-drag-grip{color:#9cacc0;flex:none;font-size:18px;line-height:24px}
+.outside-task-copy{flex:1;min-width:0}.outside-task-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;width:100%;border:0;background:none;padding:0;color:var(--ink);text-align:left;font-weight:650;font-size:14px;line-height:1.65;cursor:grab}
+.outside-task-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#7b899f;font-size:12px;line-height:1.6;margin-top:7px;overflow-wrap:anywhere}
+.outside-task-meta .badge{font-size:11px;padding:3px 6px}.calendar-micro-label{display:block;font-size:10px;line-height:7px;letter-spacing:1px}
+.schedule-event.tiny-event:has(.calendar-micro-label){border-top:0;border-bottom:0;align-items:center}
+.schedule-event.tiny-event:has(.calendar-micro-label) .task-done-check{width:8px;height:8px;margin:0}
+.schedule-event.tiny-event:has(.calendar-micro-label) .schedule-event-open{min-height:7px;line-height:7px}
+@media(max-width:900px){.calendar-with-outside{grid-template-columns:minmax(0,1fr)}.outside-tray{height:min(420px,var(--calendar-panel-height))}}
+
+.outside-task-category{max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.outside-task-time{white-space:nowrap}
