@@ -39,6 +39,8 @@ npm run test:e2e
 
 PlaywrightのOSライブラリのインストールには開発コンテナの管理者権限が必要です。ブラウザテストは一時データを使用し、通常の保存先を変更しません。500件の表示・画面切り替えの測定結果は `test-results/performance.json` に出力します。
 
+脆弱性の確認は `npm run security:check`、修正と再監査・型チェック・テスト・ビルドは `npm run security:fix` で実行できます。週次の依存更新PRと自動検証も設定しています。詳細は [依存パッケージの脆弱性確認と修正](docs/dependency-security.md) を参照してください。
+
 ## 資料
 
 - [要件](ドキュメント/要件.md)

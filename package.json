@@ -13,7 +13,10 @@
     "init": "tsx src/server/init.ts",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "security:check": "npm audit",
+    "security:verify": "npm run security:check && npm run check && npm test && npm run build",
+    "security:fix": "npm audit fix --ignore-scripts && npm run security:verify"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",
